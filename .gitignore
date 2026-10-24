@@ -218,3 +218,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Datos locales del proyecto (dataset y capa procesada)
+backend/data/*.csv
+backend/data/*.json
+backend/data/*.parquet
+backend/data/processed/
+backend/data/.staging-*
+backend/data/.ingest.lock
+backend/.env
+!backend/data/README.md
