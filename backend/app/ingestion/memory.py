@@ -9,13 +9,48 @@ from __future__ import annotations
 
 import os
 import platform
-import resource
 import threading
+from ctypes import POINTER, Structure, c_int, c_size_t, c_ulong, c_void_p, sizeof
 from pathlib import Path
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - solo Windows
+    resource = None  # type: ignore[assignment]
 
 _PAGE_SIZE = os.sysconf("SC_PAGE_SIZE") if hasattr(os, "sysconf") else 4096
 _STATM = Path("/proc/self/statm")
 _IS_LINUX = platform.system() == "Linux"
+_IS_WINDOWS = platform.system() == "Windows"
+if _IS_WINDOWS:  # pragma: no cover - solo Windows
+    from ctypes import windll
+
+
+class _ProcessMemoryCounters(Structure):  # pragma: no cover - solo Windows
+    _fields_ = [
+        ("cb", c_ulong),
+        ("PageFaultCount", c_ulong),
+        ("PeakWorkingSetSize", c_size_t),
+        ("WorkingSetSize", c_size_t),
+        ("QuotaPeakPagedPoolUsage", c_size_t),
+        ("QuotaPagedPoolUsage", c_size_t),
+        ("QuotaPeakNonPagedPoolUsage", c_size_t),
+        ("QuotaNonPagedPoolUsage", c_size_t),
+        ("PagefileUsage", c_size_t),
+        ("PeakPagefileUsage", c_size_t),
+    ]
+
+
+if _IS_WINDOWS:  # pragma: no cover - solo Windows
+    _get_current_process = windll.kernel32.GetCurrentProcess
+    _get_current_process.restype = c_void_p
+    _get_process_memory_info = windll.psapi.GetProcessMemoryInfo
+    _get_process_memory_info.argtypes = [
+        c_void_p,
+        POINTER(_ProcessMemoryCounters),
+        c_ulong,
+    ]
+    _get_process_memory_info.restype = c_int
 
 
 class MemoryLimitExceeded(RuntimeError):
@@ -25,10 +60,21 @@ class MemoryLimitExceeded(RuntimeError):
 def _read_rss_bytes() -> int:
     """Devuelve la memoria residente actual del proceso en bytes."""
 
+    if _IS_WINDOWS:
+        counters = _ProcessMemoryCounters()
+        counters.cb = sizeof(counters)
+        if not _get_process_memory_info(
+            _get_current_process(), counters, counters.cb
+        ):
+            raise OSError("No se pudo leer la memoria del proceso en Windows.")
+        return int(counters.WorkingSetSize)
+
     try:
         fields = _STATM.read_text().split()
         return int(fields[1]) * _PAGE_SIZE
     except (OSError, IndexError, ValueError):
+        if resource is None:
+            raise OSError("No se pudo leer la memoria del proceso.") from None
         usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
         # Linux reporta KiB; macOS reporta bytes.
         return int(usage) * 1024 if _IS_LINUX else int(usage)
@@ -37,8 +83,19 @@ def _read_rss_bytes() -> int:
 def get_peak_rss_mb() -> float:
     """Pico de memoria residente reportado por el sistema operativo."""
 
-    usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    peak_bytes = int(usage) * 1024 if _IS_LINUX else int(usage)
+    if _IS_WINDOWS:
+        counters = _ProcessMemoryCounters()
+        counters.cb = sizeof(counters)
+        if not _get_process_memory_info(
+            _get_current_process(), counters, counters.cb
+        ):
+            raise OSError("No se pudo leer la memoria del proceso en Windows.")
+        peak_bytes = int(counters.PeakWorkingSetSize)
+    else:
+        if resource is None:
+            raise OSError("No se pudo leer la memoria máxima del proceso.")
+        usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        peak_bytes = int(usage) * 1024 if _IS_LINUX else int(usage)
     return round(peak_bytes / (1024 * 1024), 2)
 
 
