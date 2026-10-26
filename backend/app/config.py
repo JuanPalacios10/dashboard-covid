@@ -6,6 +6,8 @@ Los valores se pueden sobreescribir con variables de entorno con el prefijo
     COVID_DATASET_PATH=/ruta/al/dataset.csv
     COVID_CHUNK_SIZE=100000
     COVID_MEMORY_LIMIT_MB=1024
+    COVID_MONGO_URI=mongodb://localhost:27017
+    COVID_MONGO_DATABASE=covid_dashboard
 """
 
 from __future__ import annotations
@@ -44,6 +46,14 @@ class Settings(BaseSettings):
     memory_limit_mb: int = Field(default=1_024, ge=128)
     parquet_compression: str = "zstd"
     deduplicate: bool = True
+
+    # Persistencia MongoDB.
+    mongo_uri: str = "mongodb://localhost:27017"
+    mongo_database: str = "covid_dashboard"
+    mongo_cases_collection: str = "casos_covid"
+    mongo_summary_collection: str = "resumen_diario_municipios"
+    mongo_batch_size: int = Field(default=5_000, ge=1)
+    mongo_enabled: bool = False
 
     # API.
     cors_origins: list[str] = ["*"]
