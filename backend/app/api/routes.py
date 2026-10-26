@@ -83,6 +83,12 @@ def start_ingestion(payload: IngestaRequest) -> dict[str, Any]:
         overwrite=payload.overwrite,
         limit_rows=payload.limit_rows,
         compression=settings.parquet_compression,
+        mongo_enabled=settings.mongo_enabled,
+        mongo_uri=settings.mongo_uri,
+        mongo_database=settings.mongo_database,
+        mongo_cases_collection=settings.mongo_cases_collection,
+        mongo_summary_collection=settings.mongo_summary_collection,
+        mongo_batch_size=settings.mongo_batch_size,
     )
 
     try:

@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - Windows
 from .cleaner import clean_chunk
 from .dedupe import IdDeduplicator
 from .memory import MemoryMonitor
+from .mongo_writer import MongoWriter
 from .report import build_manifest, new_run_id, write_manifest
 from .schema import (
     FINAL_ARROW_SCHEMA,
@@ -70,6 +71,12 @@ class IngestionConfig:
     limit_rows: int | None = None
     compression: str = "zstd"
     keep_staging: bool = False
+    mongo_enabled: bool = False
+    mongo_uri: str = "mongodb://localhost:27017"
+    mongo_database: str = "covid_dashboard"
+    mongo_cases_collection: str = "casos_covid"
+    mongo_summary_collection: str = "resumen_diario_municipios"
+    mongo_batch_size: int = 5_000
 
     def __post_init__(self) -> None:
         if self.chunk_size < 1:
@@ -243,6 +250,17 @@ def run_ingestion(
         reports: list[ChunkReport] = []
         deduplicator = IdDeduplicator() if config.deduplicate else None
         monitor = MemoryMonitor(config.memory_limit_mb)
+        mongo_writer = (
+            MongoWriter(
+                uri=config.mongo_uri,
+                database=config.mongo_database,
+                cases_collection=config.mongo_cases_collection,
+                summary_collection=config.mongo_summary_collection,
+                batch_size=config.mongo_batch_size,
+            )
+            if config.mongo_enabled
+            else None
+        )
         cleanup_writers: list[ParquetPartitionWriter] = []
 
         cases_writer = ParquetPartitionWriter(
@@ -267,6 +285,9 @@ def run_ingestion(
 
         monitor.start()
         try:
+            if mongo_writer is not None:
+                mongo_writer.check_connection()
+
             header_columns = _read_header(source_path)
             usecols, rename_map = resolve_source_columns(header_columns)
             internal_order = list(FINAL_COLUMNS) + ["_unidad_edad"]
@@ -298,6 +319,8 @@ def run_ingestion(
                 reports.append(report)
 
                 if not clean.empty:
+                    if mongo_writer is not None:
+                        mongo_writer.write(clean)
                     years = clean["fecha_reporte_web"].dt.year.astype("int16")
                     for year, group in clean.groupby(years, sort=True):
                         cases_writer.write(group, partition=int(year))
@@ -342,6 +365,9 @@ def run_ingestion(
             cases_writer.close()
             rejected_writer.close()
             cleanup_writers.clear()
+
+            if mongo_writer is not None:
+                mongo_writer.consolidate_summary()
 
             rejected_path: Path | None = None
             if rejected_writer.rows_written > 0:
@@ -416,6 +442,8 @@ def run_ingestion(
                     logger.warning(
                         "No se pudo cerrar un writer Parquet.", exc_info=True
                     )
+            if mongo_writer is not None:
+                mongo_writer.close()
             if not config.keep_staging:
                 shutil.rmtree(staging_dir, ignore_errors=True)
 

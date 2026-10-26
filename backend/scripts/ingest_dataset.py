@@ -90,6 +90,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> int:
+    settings = get_settings()
     args = parse_args()
     config = IngestionConfig(
         source_path=args.source,
@@ -100,6 +101,12 @@ def main() -> int:
         overwrite=args.overwrite,
         limit_rows=args.limit_rows,
         keep_staging=args.keep_staging,
+        mongo_enabled=settings.mongo_enabled,
+        mongo_uri=settings.mongo_uri,
+        mongo_database=settings.mongo_database,
+        mongo_cases_collection=settings.mongo_cases_collection,
+        mongo_summary_collection=settings.mongo_summary_collection,
+        mongo_batch_size=settings.mongo_batch_size,
     )
 
     def on_progress(progress: dict[str, object]) -> None:
