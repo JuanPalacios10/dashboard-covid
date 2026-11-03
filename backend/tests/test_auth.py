@@ -1,98 +1,270 @@
-"""Pruebas de aceptación y unitarias para la autenticación y emisión de tokens JWT."""
+"""Pruebas integrales y unitarias para autenticación JWT, MongoDB y RBAC."""
 
 from __future__ import annotations
 
 import time
-from fastapi.testclient import TestClient
+import unittest
+from typing import Any
+from unittest.mock import MagicMock
 
-from app.main import app
-from app.services.auth import AuthService, InvalidCredentialsError
+from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 
-client = TestClient(app)
-
-
-def test_login_exitoso_alfa_valida_jwt_rol_y_id() -> None:
-    """Prueba de Aceptación Alfa: Inicio de sesión exitoso.
-
-    Verifica que al enviar credenciales válidas:
-    1. Responda HTTP 200 OK.
-    2. Entregue access_token y token_type 'bearer'.
-    3. Al decodificar el token, contenga sub='usr_94820' y role='admin'.
-    4. Contenga claims iat y exp con vigencia futura.
-    """
-    payload = {
-        "email": "usuario.prueba@dominio.com",
-        "password": "PasswordValido123*",
-    }
-
-    response = client.post("/api/v1/auth/login", json=payload)
-
-    # 1. Código 200 OK
-    assert response.status_code == 200
-
-    # 2. Estructura de respuesta
-    data = response.json()
-    assert "access_token" in data
-    assert data["token_type"] == "bearer"
-    token = data["access_token"]
-    assert isinstance(token, str) and len(token) > 0
-
-    # 3. Decodificación y validación de claims
-    service = AuthService()
-    claims = service.decode_token(token)
-
-    assert claims["sub"] == "usr_94820"
-    assert claims["role"] == "admin"
-
-    # 4. Vigencia temporal
-    now = int(time.time())
-    assert "iat" in claims
-    assert "exp" in claims
-    assert claims["exp"] > now
+from app.api.auth import (
+    CreateUserRequest,
+    LoginRequest,
+    create_user,
+    get_current_user,
+    get_me,
+    login,
+    require_roles,
+)
+from app.database import UserRepository
+from app.services.auth import (
+    AuthenticationError,
+    AuthService,
+    InvalidCredentialsError,
+    UserAlreadyExistsError,
+    UserRole,
+)
+from app.services.security import PasswordHasher
+from scripts.create_user import DEFAULT_SEED_USERS, seed_default_users
 
 
-def test_login_contrasena_incorrecta_retorna_401() -> None:
-    """Verifica que contraseñas incorrectas sean rechazadas con HTTP 401."""
-    payload = {
-        "email": "usuario.prueba@dominio.com",
-        "password": "PasswordErronea999*",
-    }
+def _build_mongo_collection_double() -> MagicMock:
+    """Construye un doble de prueba de Collection de PyMongo que respalda consultas e índices."""
+    store: dict[str, dict[str, Any]] = {}
+    collection = MagicMock()
 
-    response = client.post("/api/v1/auth/login", json=payload)
+    def _find_one(
+        filter_query: dict[str, Any], projection: dict[str, int] | None = None
+    ) -> dict[str, Any] | None:
+        for doc in store.values():
+            if all(doc.get(k) == v for k, v in filter_query.items()):
+                result = dict(doc)
+                if projection and projection.get("_id") == 0:
+                    result.pop("_id", None)
+                return result
+        return None
 
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Credenciales inválidas"
+    def _insert_one(document: dict[str, Any]) -> MagicMock:
+        email = document["email"]
+        if email in store:
+            from pymongo.errors import DuplicateKeyError
+
+            raise DuplicateKeyError(f"E11000 duplicate key error: {email}")
+        store[email] = dict(document)
+        return MagicMock(inserted_id=document["user_id"])
+
+    def _update_one(
+        filter_query: dict[str, Any], update_doc: dict[str, Any]
+    ) -> MagicMock:
+        for doc in store.values():
+            if all(doc.get(k) == v for k, v in filter_query.items()):
+                if "$set" in update_doc:
+                    doc.update(update_doc["$set"])
+        return MagicMock(modified_count=1)
+
+    collection.find_one.side_effect = _find_one
+    collection.insert_one.side_effect = _insert_one
+    collection.update_one.side_effect = _update_one
+    return collection
 
 
-def test_login_usuario_inexistente_retorna_401() -> None:
-    """Verifica que correos no registrados sean rechazados con HTTP 401."""
-    payload = {
-        "email": "no.existe@dominio.com",
-        "password": "CualquierPassword123*",
-    }
+class TestAuthAndRBAC(unittest.TestCase):
+    """Pruebas de autenticación JWT, persistencia en repositorio MongoDB y control de roles."""
 
-    response = client.post("/api/v1/auth/login", json=payload)
+    def setUp(self) -> None:
+        self.mock_collection = _build_mongo_collection_double()
+        self.user_repo = UserRepository(collection=self.mock_collection)
+        self.hasher = PasswordHasher(iterations=100_000)
+        self.auth_service = AuthService(
+            user_repository=self.user_repo,
+            password_hasher=self.hasher,
+            secret_key="test-secret-key-for-jwt-verification",
+            token_expire_minutes=60,
+        )
 
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Credenciales inválidas"
+    def test_roles_definidos_admin_analista_ejecutivo(self) -> None:
+        """Verifica que existan exactamente los 3 roles requeridos."""
+        roles = {r.value for r in UserRole}
+        self.assertEqual(roles, {"admin", "analista", "ejecutivo"})
+
+    def test_seed_default_users_crea_admin_analista_ejecutivo(self) -> None:
+        """Verifica que el script de semillado cree los 3 perfiles base con clave cifrada."""
+        exit_code = seed_default_users(self.auth_service)
+        self.assertEqual(exit_code, 0)
+        self.assertEqual(len(DEFAULT_SEED_USERS), 3)
+
+        for spec in DEFAULT_SEED_USERS:
+            stored = self.user_repo.get_by_email(spec["email"])
+            self.assertIsNotNone(stored)
+            assert stored is not None
+            self.assertEqual(stored["role"], spec["role"].value)
+            self.assertTrue(stored["hashed_password"].startswith("pbkdf2_sha256$"))
+            self.assertNotEqual(stored["hashed_password"], spec["password"])
+
+        # Segunda ejecución idempotente (no falla si ya existen)
+        exit_code_2 = seed_default_users(self.auth_service)
+        self.assertEqual(exit_code_2, 0)
+
+    def test_login_exitoso_entrega_jwt_y_actualiza_last_login(self) -> None:
+        """Prueba inicio de sesión exitoso, claims del JWT y actualización en MongoDB."""
+        self.auth_service.create_user(
+            user_id="usr_admin_001",
+            email="admin@covid.com",
+            password="AdminSeguro2026*",
+            full_name="Administrador Principal",
+            role=UserRole.ADMIN,
+        )
+
+        response = login(
+            payload=LoginRequest(email="admin@covid.com", password="AdminSeguro2026*"),
+            auth_service=self.auth_service,
+        )
+
+        self.assertEqual(response.token_type, "bearer")
+        self.assertEqual(response.user.user_id, "usr_admin_001")
+        self.assertEqual(response.user.role, UserRole.ADMIN)
+        self.assertIsNotNone(response.user.last_login_at)
+
+        claims = self.auth_service.decode_token(response.access_token)
+        self.assertEqual(claims["sub"], "usr_admin_001")
+        self.assertEqual(claims["role"], "admin")
+        self.assertEqual(claims["email"], "admin@covid.com")
+        self.assertGreater(claims["exp"], int(time.time()))
+
+    def test_login_credenciales_invalidas_retorna_401(self) -> None:
+        """Verifica que clave incorrecta o usuario inexistente lancen HTTP 401."""
+        self.auth_service.create_user(
+            email="analista@covid.com",
+            password="AnalistaSeguro2026*",
+            full_name="Analista Prueba",
+            role=UserRole.ANALISTA,
+        )
+
+        # Contraseña errónea
+        with self.assertRaises(HTTPException) as ctx_wrong_pwd:
+            login(
+                payload=LoginRequest(
+                    email="analista@covid.com", password="PasswordErronea999*"
+                ),
+                auth_service=self.auth_service,
+            )
+        self.assertEqual(ctx_wrong_pwd.exception.status_code, 401)
+
+        # Usuario inexistente
+        with self.assertRaises(HTTPException) as ctx_no_user:
+            login(
+                payload=LoginRequest(
+                    email="no.existe@covid.com", password="AnalistaSeguro2026*"
+                ),
+                auth_service=self.auth_service,
+            )
+        self.assertEqual(ctx_no_user.exception.status_code, 401)
+
+    def test_solo_admin_puede_crear_usuarios_rbac(self) -> None:
+        """Verifica que solo el rol 'admin' pueda crear usuarios; analista y ejecutivo reciben 403."""
+        seed_default_users(self.auth_service)
+
+        # 1. Login como admin, analista y ejecutivo
+        admin_login = login(
+            LoginRequest(email="admin@covid.com", password="AdminSeguro2026*"),
+            auth_service=self.auth_service,
+        )
+        analista_login = login(
+            LoginRequest(email="analista@covid.com", password="AnalistaSeguro2026*"),
+            auth_service=self.auth_service,
+        )
+        ejecutivo_login = login(
+            LoginRequest(email="ejecutivo@covid.com", password="EjecutivoSeguro2026*"),
+            auth_service=self.auth_service,
+        )
+
+        admin_checker = require_roles([UserRole.ADMIN])
+
+        # Validar usuario actual desde el token de admin
+        admin_user = get_current_user(
+            credentials=HTTPAuthorizationCredentials(
+                scheme="Bearer", credentials=admin_login.access_token
+            ),
+            auth_service=self.auth_service,
+        )
+        verified_admin = admin_checker(current_user=admin_user)
+
+        # Admin crea exitosamente un nuevo usuario ejecutivo
+        created_response = create_user(
+            payload=CreateUserRequest(
+                email="nuevo.ejecutivo@covid.com",
+                password="NuevoEjecutivo2026*",
+                full_name="Nuevo Ejecutivo",
+                role=UserRole.EJECUTIVO,
+            ),
+            _admin_user=verified_admin,
+            auth_service=self.auth_service,
+        )
+        self.assertEqual(created_response.email, "nuevo.ejecutivo@covid.com")
+        self.assertEqual(created_response.role, UserRole.EJECUTIVO)
+        self.assertFalse(hasattr(created_response, "hashed_password"))
+
+        # 2. Analista intenta pasar el guard de admin -> HTTP 403 Forbidden
+        analista_user = get_current_user(
+            credentials=HTTPAuthorizationCredentials(
+                scheme="Bearer", credentials=analista_login.access_token
+            ),
+            auth_service=self.auth_service,
+        )
+        with self.assertRaises(HTTPException) as ctx_analista:
+            admin_checker(current_user=analista_user)
+        self.assertEqual(ctx_analista.exception.status_code, 403)
+
+        # 3. Ejecutivo intenta pasar el guard de admin -> HTTP 403 Forbidden
+        ejecutivo_user = get_current_user(
+            credentials=HTTPAuthorizationCredentials(
+                scheme="Bearer", credentials=ejecutivo_login.access_token
+            ),
+            auth_service=self.auth_service,
+        )
+        with self.assertRaises(HTTPException) as ctx_ejecutivo:
+            admin_checker(current_user=ejecutivo_user)
+        self.assertEqual(ctx_ejecutivo.exception.status_code, 403)
+
+    def test_crear_usuario_duplicado_retorna_409_conflict(self) -> None:
+        """Verifica que crear un usuario con un email ya existente retorne HTTP 409."""
+        seed_default_users(self.auth_service)
+        admin_doc = self.user_repo.get_by_email("admin@covid.com")
+        assert admin_doc is not None
+
+        with self.assertRaises(HTTPException) as ctx_dup:
+            create_user(
+                payload=CreateUserRequest(
+                    email="analista@covid.com",
+                    password="AnalistaSeguro2026*",
+                    full_name="Analista Duplicado",
+                    role=UserRole.ANALISTA,
+                ),
+                _admin_user=admin_doc,
+                auth_service=self.auth_service,
+            )
+        self.assertEqual(ctx_dup.exception.status_code, 409)
+
+    def test_endpoint_me_retorna_usuario_autenticado(self) -> None:
+        """Verifica que GET /me retorne los datos públicos del usuario autenticado."""
+        seed_default_users(self.auth_service)
+        ejecutivo_login = login(
+            LoginRequest(email="ejecutivo@covid.com", password="EjecutivoSeguro2026*"),
+            auth_service=self.auth_service,
+        )
+        current = get_current_user(
+            credentials=HTTPAuthorizationCredentials(
+                scheme="Bearer", credentials=ejecutivo_login.access_token
+            ),
+            auth_service=self.auth_service,
+        )
+        profile = get_me(current_user=current)
+        self.assertEqual(profile.email, "ejecutivo@covid.com")
+        self.assertEqual(profile.role, UserRole.EJECUTIVO)
 
 
-def test_auth_service_unitario() -> None:
-    """Pruebas unitarias directas del servicio AuthService."""
-    service = AuthService()
-
-    # Usuario válido
-    user = service.authenticate_user(
-        "analista.prueba@dominio.com", "PasswordValido123*"
-    )
-    assert user["user_id"] == "usr_10204"
-    assert user["role"] == "analista"
-
-    # Token con rol analista
-    token = service.create_access_token(
-        user_id=user["user_id"],
-        role=user["role"],
-    )
-    claims = service.decode_token(token)
-    assert claims["sub"] == "usr_10204"
-    assert claims["role"] == "analista"
+if __name__ == "__main__":
+    unittest.main()
