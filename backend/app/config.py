@@ -52,8 +52,15 @@ class Settings(BaseSettings):
     mongo_database: str = "covid_dashboard"
     mongo_cases_collection: str = "casos_covid"
     mongo_summary_collection: str = "resumen_diario_municipios"
+    mongo_users_collection: str = "usuarios"
     mongo_batch_size: int = Field(default=5_000, ge=1)
     mongo_enabled: bool = False
+
+    # Seguridad y Autenticación JWT.
+    jwt_secret_key: str = "covid-dashboard-super-secret-key-production-change-me"
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = Field(default=60, ge=1)
+    password_hash_iterations: int = Field(default=600_000, ge=100_000)
 
     # API.
     cors_origins: list[str] = ["*"]
