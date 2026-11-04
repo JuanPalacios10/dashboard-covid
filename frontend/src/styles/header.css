@@ -1,0 +1,106 @@
+/* ---------- cabecera ---------- */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  padding: 6px 0 14px;
+}
+.brand {
+  font: 800 22px/1 var(--display);
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand span.l {
+  font-weight: 300;
+}
+.brand i {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--cloud);
+  display: inline-block;
+  position: relative;
+}
+.brand i:after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--teal);
+}
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-left: 8px;
+}
+.tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 8px 12px;
+  font-weight: 500;
+  color: var(--ink2);
+}
+.tab[aria-selected='true'] {
+  color: var(--ink);
+  border-bottom-color: var(--teal);
+  font-weight: 700;
+}
+.tab:hover:not([disabled]) {
+  color: var(--ink);
+}
+.tab[disabled] {
+  color: var(--lock);
+  cursor: not-allowed;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sp {
+  flex: 1;
+}
+.live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+.live b {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+  display: inline-block;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.role {
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+.role strong {
+  color: var(--ink);
+}
+.link {
+  background: none;
+  border: 0;
+  color: var(--teal-text);
+  text-decoration: underline;
+  padding: 4px;
+}

@@ -1,0 +1,63 @@
+/* ---------- inicio ---------- */
+.landing-page {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.landing {
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 90px 16px;
+  border-radius: 0;
+  background: var(--surface);
+}
+.landing .cloud {
+  position: absolute;
+  width: min(340px, 48vw);
+  height: auto;
+  fill: var(--cloud);
+}
+.landing .tl {
+  top: 0;
+  left: 0;
+}
+.landing .br {
+  bottom: 0;
+  right: 0;
+  transform: rotate(180deg);
+}
+.landing h1 {
+  margin: 0;
+  font: 800 clamp(52px, 11vw, 118px)/1 var(--display);
+  letter-spacing: -0.03em;
+}
+.landing p.sub {
+  margin: 6px 0 0;
+  font: 300 clamp(36px, 7.5vw, 78px)/1.1 var(--display);
+}
+.landing .cta {
+  display: flex;
+  gap: clamp(24px, 10vw, 110px);
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 44px;
+}
+.pill {
+  background: transparent;
+  border: 1.5px solid var(--teal);
+  color: var(--teal-text);
+  border-radius: 999px;
+  padding: 10px 28px;
+  font: 500 17px var(--body);
+  transition: background 0.15s;
+}
+.pill:hover {
+  background: var(--teal-wash);
+}
