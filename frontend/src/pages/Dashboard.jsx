@@ -1,17 +1,20 @@
 import { useState, useEffect, useMemo } from 'react';
 import Rail from '../components/Rail.jsx';
 import { Icon } from '../components/ui/Icons.jsx';
+import { useAuth } from '../context/auth.js';
 import { DEPTS, getView } from '../data/mock.js';
+import { roleLabel } from '../utils/roles.js';
 import Informes from './Informes.jsx';
 import Proyecciones from './Proyecciones.jsx';
 import Resumen from './Resumen.jsx';
 
 export default function Dashboard({ onExit, toast }) {
+  const { user } = useAuth();
   const [tab, setTab] = useState('resumen');
   const [range, setRange] = useState(60);
   const [terr, setTerr] = useState('all');
   const [sim, setSim] = useState({ R: 1.3, m: 40 });
-  const [live, setLive] = useState({ lat: 238, extra: 0, t: new Date(), flash: 0 });
+  const [live, setLive] = useState(() => ({ lat: 238, extra: 0, t: new Date(), flash: 0 }));
   useEffect(() => {
     const id = setInterval(
       () =>
@@ -64,10 +67,10 @@ export default function Dashboard({ onExit, toast }) {
           <b></b>En vivo · {live.lat} ms · {hhmm}
         </span>
         <span className="role">
-          Rol: <strong>Gerencia / decisores</strong>
+          {user?.full_name ? `${user.full_name} · ` : ''}Rol: <strong>{roleLabel(user?.role)}</strong>
         </span>
         <button className="link" onClick={onExit}>
-          Salir
+          Cerrar sesión
         </button>
       </header>
       <div className="filters">

@@ -1,6 +1,6 @@
 import { Icon } from './ui/Icons.jsx';
 import { NATIONAL_CONFIRMED } from '../data/mock.js';
-import { dec, fmt, pct } from '../lib/format.js';
+import { dec, fmt, pct } from '../utils/format.js';
 
 export default function Rail({ view, live }) {
   const share = view.conf / NATIONAL_CONFIRMED;

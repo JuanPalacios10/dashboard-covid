@@ -67,6 +67,33 @@ class CreateUserRequest(BaseModel):
     )
 
 
+class RegisterRequest(BaseModel):
+    """Esquema de entrada para el auto-registro de usuarios desde el frontend."""
+
+    email: str = Field(
+        ...,
+        examples=["nuevo.usuario@covid.com"],
+        description="Correo electrónico único del nuevo usuario.",
+    )
+    password: str = Field(
+        ...,
+        min_length=8,
+        examples=["ClaveSegura2026*"],
+        description="Contraseña en texto plano que será validada y cifrada con PBKDF2-SHA256.",
+    )
+    full_name: str = Field(
+        ...,
+        min_length=2,
+        examples=["María Gómez"],
+        description="Nombre completo del usuario.",
+    )
+    role: UserRole = Field(
+        default=UserRole.ANALISTA,
+        examples=[UserRole.ANALISTA],
+        description="Rol solicitado: 'admin', 'analista' o 'ejecutivo'.",
+    )
+
+
 class UserResponse(BaseModel):
     """Esquema público de salida para información de usuario (excluye credenciales)."""
 
@@ -108,6 +135,20 @@ def _to_user_response(user_doc: dict[str, Any]) -> UserResponse:
         is_active=user_doc.get("is_active", True),
         created_at=user_doc.get("created_at"),
         last_login_at=user_doc.get("last_login_at"),
+    )
+
+
+def _build_token_response(auth_service: AuthService, user_doc: dict[str, Any]) -> TokenResponse:
+    """Genera el token JWT y la respuesta de autenticación para un usuario válido."""
+    access_token = auth_service.create_access_token(
+        user_id=user_doc["user_id"],
+        role=user_doc["role"],
+        email=user_doc["email"],
+    )
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=_to_user_response(user_doc),
     )
 
 
@@ -188,17 +229,49 @@ def login(
             detail=str(exc),
         ) from exc
 
-    access_token = auth_service.create_access_token(
-        user_id=user["user_id"],
-        role=user["role"],
-        email=user["email"],
-    )
+    return _build_token_response(auth_service, user)
 
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        user=_to_user_response(user),
-    )
+
+@router.post(
+    "/register",
+    response_model=TokenResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Registrarse y obtener token JWT",
+    description=(
+        "Crea un nuevo usuario en MongoDB con el rol indicado y devuelve el token JWT "
+        "para que el frontend pueda iniciar la sesión inmediatamente. "
+        "La contraseña debe tener al menos 8 caracteres, una letra y un número."
+    ),
+)
+def register(
+    payload: RegisterRequest,
+    auth_service: AuthService = Depends(get_auth_service),
+) -> TokenResponse:
+    """Registra un usuario y entrega el token de acceso de forma inmediata."""
+    try:
+        user = auth_service.create_user(
+            email=payload.email,
+            password=payload.password,
+            full_name=payload.full_name,
+            role=payload.role,
+        )
+    except WeakPasswordError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except UserAlreadyExistsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+    return _build_token_response(auth_service, user)
 
 
 @router.post(

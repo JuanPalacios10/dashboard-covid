@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Card from '../ui/Card.jsx';
 import Seg from '../ui/Seg.jsx';
 import { AGE, AGE_CFR } from '../../data/mock.js';
-import { dec, fmt, pct, sum } from '../../lib/format.js';
+import { dec, fmt, pct, sum } from '../../utils/format.js';
 
 export default function AgeBars({ view, range }) {
   const [metric, setMetric] = useState('casos');

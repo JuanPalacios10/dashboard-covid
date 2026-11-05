@@ -9,17 +9,22 @@ from unittest.mock import MagicMock
 
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.testclient import TestClient
 
 from app.api.auth import (
     CreateUserRequest,
     LoginRequest,
+    RegisterRequest,
     create_user,
+    get_auth_service,
     get_current_user,
     get_me,
     login,
+    register,
     require_roles,
 )
 from app.database import UserRepository
+from app.main import app
 from app.services.auth import (
     AuthenticationError,
     AuthService,
@@ -133,6 +138,101 @@ class TestAuthAndRBAC(unittest.TestCase):
         self.assertEqual(claims["role"], "admin")
         self.assertEqual(claims["email"], "admin@covid.com")
         self.assertGreater(claims["exp"], int(time.time()))
+
+    def test_registro_publico_crea_usuario_y_entrega_token(self) -> None:
+        """Verifica que /register cree el usuario con su rol y devuelva un JWT utilizable."""
+        response = register(
+            payload=RegisterRequest(
+                email="nuevo.registro@covid.com",
+                password="RegistroSeguro2026*",
+                full_name="Usuario Registrado",
+                role=UserRole.EJECUTIVO,
+            ),
+            auth_service=self.auth_service,
+        )
+
+        self.assertEqual(response.user.email, "nuevo.registro@covid.com")
+        self.assertEqual(response.user.role, UserRole.EJECUTIVO)
+        self.assertEqual(response.user.full_name, "Usuario Registrado")
+        self.assertEqual(response.token_type, "bearer")
+
+        claims = self.auth_service.decode_token(response.access_token)
+        self.assertEqual(claims["sub"], response.user.user_id)
+        self.assertEqual(claims["role"], "ejecutivo")
+
+        stored = self.user_repo.get_by_email("nuevo.registro@covid.com")
+        self.assertIsNotNone(stored)
+        assert stored is not None
+        self.assertNotEqual(stored["hashed_password"], "RegistroSeguro2026*")
+
+    def test_registro_duplicado_retorna_409_y_clave_debil_400(self) -> None:
+        """Verifica los errores del auto-registro para correo duplicado y clave débil."""
+        register(
+            payload=RegisterRequest(
+                email="duplicado@covid.com",
+                password="RegistroSeguro2026*",
+                full_name="Primer Registro",
+                role=UserRole.ANALISTA,
+            ),
+            auth_service=self.auth_service,
+        )
+
+        with self.assertRaises(HTTPException) as ctx_dup:
+            register(
+                payload=RegisterRequest(
+                    email="duplicado@covid.com",
+                    password="OtroRegistro2026*",
+                    full_name="Segundo Registro",
+                    role=UserRole.ANALISTA,
+                ),
+                auth_service=self.auth_service,
+            )
+        self.assertEqual(ctx_dup.exception.status_code, 409)
+
+        with self.assertRaises(HTTPException) as ctx_weak:
+            register(
+                payload=RegisterRequest(
+                    email="clave.debil@covid.com",
+                    password="sololetras",
+                    full_name="Clave Débil",
+                    role=UserRole.ANALISTA,
+                ),
+                auth_service=self.auth_service,
+            )
+        self.assertEqual(ctx_weak.exception.status_code, 400)
+
+    def test_registro_endpoint_http_201_y_login_inmediato(self) -> None:
+        """Prueba el contrato HTTP real de /auth/register y su uso posterior en /auth/login."""
+        client = TestClient(app)
+        app.dependency_overrides[get_auth_service] = lambda: self.auth_service
+
+        try:
+            register_response = client.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": "http.registro@covid.com",
+                    "password": "RegistroHttp2026*",
+                    "full_name": "Registro HTTP",
+                    "role": "analista",
+                },
+            )
+            self.assertEqual(register_response.status_code, 201)
+            body = register_response.json()
+            self.assertEqual(body["token_type"], "bearer")
+            self.assertEqual(body["user"]["role"], "analista")
+            self.assertTrue(body["access_token"])
+
+            login_response = client.post(
+                "/api/v1/auth/login",
+                json={
+                    "email": "http.registro@covid.com",
+                    "password": "RegistroHttp2026*",
+                },
+            )
+            self.assertEqual(login_response.status_code, 200)
+            self.assertEqual(login_response.json()["user"]["email"], "http.registro@covid.com")
+        finally:
+            app.dependency_overrides.clear()
 
     def test_login_credenciales_invalidas_retorna_401(self) -> None:
         """Verifica que clave incorrecta o usuario inexistente lancen HTTP 401."""

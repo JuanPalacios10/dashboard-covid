@@ -1,6 +1,4 @@
-import Dashboard from './Dashboard.jsx';
-
-export default function Landing({ onEnter, toast }) {
+export default function Landing({ onLogin, onRegister }) {
   const cloud = (
     <svg viewBox="0 0 340 240" aria-hidden="true">
       <circle cx="40" cy="30" r="150" />
@@ -17,10 +15,10 @@ export default function Landing({ onEnter, toast }) {
           <h1>Dashboard</h1>
           <p className="sub">covid-19</p>
           <div className="cta">
-            <button className="pill" onClick={() => toast('Registro pendiente de conectar al backend.')}>
+            <button className="pill" onClick={onRegister}>
               Registrarse
             </button>
-            <button className="pill" onClick={onEnter}>
+            <button className="pill" onClick={onLogin}>
               Iniciar sesión
             </button>
           </div>

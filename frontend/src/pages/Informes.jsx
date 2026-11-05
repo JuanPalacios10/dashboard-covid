@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react';
 import Card from '../components/ui/Card.jsx';
 import { DEPTS, TODAY, simulate, summarize } from '../data/mock.js';
-import { dec, fmt, pct, sum } from '../lib/format.js';
-import Resumen from './Resumen.jsx';
+import { dec, fmt, pct, sum } from '../utils/format.js';
 
 export default function Informes({ view, terr, sim, toast }) {
   const [dest, setDest] = useState('Consejo de gobierno');

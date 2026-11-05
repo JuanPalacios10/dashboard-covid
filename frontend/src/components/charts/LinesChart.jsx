@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useSize } from '../../hooks/useSize.js';
-import { compact, fmt, niceMax } from '../../lib/format.js';
+import { compact, fmt, niceMax } from '../../utils/format.js';
 
 export default function LinesChart({ short, long, series, height = 250, hline, marker, endLabels, aria }) {
   const [ref, w] = useSize();

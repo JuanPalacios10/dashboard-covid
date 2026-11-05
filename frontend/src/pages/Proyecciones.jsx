@@ -2,12 +2,11 @@ import { useMemo } from 'react';
 import LinesChart from '../components/charts/LinesChart.jsx';
 import Card from '../components/ui/Card.jsx';
 import { DAYS, PRESETS, dateAt, simulate, summarize } from '../data/mock.js';
-import { compact, dLong, dShort, dec, fmt } from '../lib/format.js';
+import { compact, dLong, dShort, dec, fmt } from '../utils/format.js';
 
 export default function Proyecciones({ view, sim, setSim }) {
   const H = 14,
     n = H + 60;
-  const idx = Array.from({ length: n }, (_, i) => (i < H ? DAYS - H + i : null));
   const dates = Array.from({ length: n }, (_, i) =>
     i < H ? dateAt(DAYS - H + i) : new Date(2026, 10, 4 + (i - H + 1)),
   );

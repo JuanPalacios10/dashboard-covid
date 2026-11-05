@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Card from '../ui/Card.jsx';
 import Seg from '../ui/Seg.jsx';
 import { DEPTS } from '../../data/mock.js';
-import { dec, fmt, sum } from '../../lib/format.js';
+import { dec, fmt, sum } from '../../utils/format.js';
 
 export default function TerritorialBars({ range, terr }) {
   const [metric, setMetric] = useState('casos');

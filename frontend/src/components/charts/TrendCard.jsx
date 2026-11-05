@@ -1,7 +1,7 @@
 import LinesChart from './LinesChart.jsx';
 import Card from '../ui/Card.jsx';
 import { DAYS, dateAt } from '../../data/mock.js';
-import { dLong, dShort, fmt } from '../../lib/format.js';
+import { dLong, dShort, fmt } from '../../utils/format.js';
 
 export default function TrendCard({ view, range }) {
   const sl = (a) => a.slice(-range);

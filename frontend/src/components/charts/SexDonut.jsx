@@ -1,5 +1,5 @@
 import Card from '../ui/Card.jsx';
-import { compact, fmt, pct, sum } from '../../lib/format.js';
+import { compact, fmt, pct, sum } from '../../utils/format.js';
 
 export default function SexDonut({ view, range }) {
   const total = sum(view.series.slice(-range));

@@ -1,4 +1,4 @@
-import { sum } from '../lib/format.js';
+import { sum } from '../utils/format.js';
 
 /* Datos de ejemplo. Reemplazar por llamadas al backend (ver README). */
 /* ======================================================================

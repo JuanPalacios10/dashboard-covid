@@ -1,5 +1,3 @@
-import { pct } from '../../lib/format.js';
-
 export const Icon = {
   virus: (
     <svg

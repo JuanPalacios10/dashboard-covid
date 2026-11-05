@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Card from '../ui/Card.jsx';
 import { DAYS, DEPTS, dateAt } from '../../data/mock.js';
-import { dShort, dec, sum } from '../../lib/format.js';
+import { dShort, dec, sum } from '../../utils/format.js';
 
 export default function Heatmap({ terr }) {
   const [hov, setHov] = useState(null);
