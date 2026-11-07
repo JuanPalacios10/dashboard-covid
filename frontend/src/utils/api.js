@@ -95,3 +95,17 @@ export const proyeccionApi = {
     return data;
   },
 };
+
+export const informesApi = {
+  exportPdf: async (token, payload = {}, signal) => {
+    const response = await api.post('/informes/pdf', payload, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/pdf',
+      },
+      responseType: 'blob',
+      signal,
+    });
+    return response.data;
+  },
+};

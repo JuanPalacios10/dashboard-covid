@@ -193,7 +193,13 @@ export default function Dashboard({ onExit, toast }) {
           />
         )}
         {tab === 'informes' && (
-          <Informes view={view} terrName={terrName} sim={sim} toast={toast} />
+          <Informes
+            anio={anio}
+            departamento={terr === 'all' ? null : terr}
+            terrName={terrName}
+            sim={sim}
+            toast={toast}
+          />
         )}
       </div>
       <footer className="foot">
