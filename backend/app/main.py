@@ -11,6 +11,7 @@ from .api.auth import router as auth_router
 from .api.dashboard import router as dashboard_router
 from .api.kpis import router as kpis_router
 from .api.projections import router as projections_router
+from .api.informes import router as informes_router
 from .api.routes import router
 from .config import get_settings
 
@@ -38,6 +39,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(kpis_router, prefix="/api/v1")
 app.include_router(dashboard_router, prefix="/api/v1")
 app.include_router(projections_router, prefix="/api/v1")
+app.include_router(informes_router, prefix="/api/v1")
 
 
 @app.middleware("http")
