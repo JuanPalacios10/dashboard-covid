@@ -1,0 +1,75 @@
+/* Layout: columna de KPIs fija a la izquierda (como el panel de referencia) + tablero de gráficas a la derecha.
+   Paleta: azul marino de las nubes del inicio, turquesa de las tarjetas del panel, blanco. */
+:root {
+  --bg: #f3f7f9;
+  --surface: #ffffff;
+  --ink: #0b0830;
+  --ink2: #46566b;
+  --muted: #74849a;
+  --line: #e2e9ee;
+  --grid: #e8eef2;
+  --cloud: #20354d;
+  --teal: #1fb5c8;
+  --teal-deep: #0b7a8a;
+  --teal-text: #0f7c8b;
+  --teal-wash: #e3f5f8;
+  --cat-a: #1fb5c8;
+  --cat-b: #20354d;
+  --s-opt: #1baf7a;
+  --s-mod: #2a78d6;
+  --s-pes: #eb6834;
+  --sim: #0b0830;
+  --lock: #9aa8b8;
+  --good: #006300;
+  --bad: #b3261e;
+  --display: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --body: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg: #0a1420;
+    --surface: #12202f;
+    --ink: #eef4f8;
+    --ink2: #b4c3d0;
+    --muted: #8aa0b4;
+    --line: #22364a;
+    --grid: #1b2b3c;
+    --cloud: #1b3250;
+    --teal: #3cd0e0;
+    --teal-text: #6adbe8;
+    --teal-wash: #12323c;
+    --cat-a: #3cd0e0;
+    --cat-b: #9fb9d6;
+    --s-opt: #199e70;
+    --s-mod: #3987e5;
+    --s-pes: #d95926;
+    --sim: #eef4f8;
+    --lock: #5d7287;
+    --good: #0ca30c;
+    --bad: #ff8a80;
+    color-scheme: dark;
+  }
+}
+:root[data-theme='dark'] {
+  --bg: #0a1420;
+  --surface: #12202f;
+  --ink: #eef4f8;
+  --ink2: #b4c3d0;
+  --muted: #8aa0b4;
+  --line: #22364a;
+  --grid: #1b2b3c;
+  --cloud: #1b3250;
+  --teal: #3cd0e0;
+  --teal-text: #6adbe8;
+  --teal-wash: #12323c;
+  --cat-a: #3cd0e0;
+  --cat-b: #9fb9d6;
+  --s-opt: #199e70;
+  --s-mod: #3987e5;
+  --s-pes: #d95926;
+  --sim: #eef4f8;
+  --lock: #5d7287;
+  --good: #0ca30c;
+  --bad: #ff8a80;
+  color-scheme: dark;
+}

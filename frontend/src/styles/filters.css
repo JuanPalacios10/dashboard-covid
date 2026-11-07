@@ -1,0 +1,45 @@
+/* ---------- filtros ---------- */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+.fgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.flabel {
+  font: 700 12px var(--display);
+  color: var(--teal-text);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.chip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 14px;
+  color: var(--ink2);
+}
+.chip[aria-pressed='true'] {
+  background: var(--teal-deep);
+  border-color: var(--teal-deep);
+  color: #fff;
+  font-weight: 700;
+}
+select {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 10px;
+  min-width: 220px;
+  max-width: 100%;
+}

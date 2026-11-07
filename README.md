@@ -185,6 +185,10 @@ uvicorn app.main:app --reload
 | `POST` | `/api/v1/ingesta` | Inicia la ingesta en segundo plano (202). |
 | `GET` | `/api/v1/ingesta/estado` | Estado del job y último manifiesto. |
 | `GET` | `/api/v1/ingesta/manifiestos?limite=10` | Historial de corridas. |
+| `POST` | `/api/v1/auth/register` | Auto-registro de usuario; devuelve JWT y perfil. |
+| `POST` | `/api/v1/auth/login` | Inicio de sesión; devuelve JWT y perfil. |
+| `GET` | `/api/v1/auth/me` | Perfil del usuario autenticado. |
+| `POST` | `/api/v1/auth/users` | Crear usuario (restringido a rol `admin`). |
 
 Ejemplo:
 
@@ -197,6 +201,31 @@ curl http://127.0.0.1:8000/api/v1/ingesta/estado
 ```
 
 La documentación interactiva está en `http://127.0.0.1:8000/docs`.
+
+## Frontend
+
+El frontend React incluye la landing, las ventanas de login y registro, y el
+dashboard protegido. El login y el registro devuelven un JWT que se guarda en
+`localStorage`; al autenticarse se redirige automáticamente a `/dashboard`.
+
+```bash
+cd frontend
+npm install
+cp .env.example .env        # opcional: ajustar VITE_API_URL
+npm run dev
+```
+
+Por defecto el frontend consume `http://127.0.0.1:8000/api/v1`. El backend debe
+estar en ejecución y MongoDB disponible para registrar o autenticar usuarios.
+Los usuarios de prueba se crean con:
+
+```bash
+cd backend
+python scripts/create_user.py --seed
+```
+
+Rutas del frontend: `/` (landing), `/login`, `/register` y `/dashboard`
+(protegida: sin sesión redirige a `/login`).
 
 ## Criterios de aceptación
 
