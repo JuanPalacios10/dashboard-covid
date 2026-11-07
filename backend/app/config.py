@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     mongo_database: str = "covid_dashboard"
     mongo_cases_collection: str = "casos_covid"
     mongo_summary_collection: str = "resumen_diario_municipios"
+    mongo_kpis_collection: str = "kpis_gerenciales"
+    mongo_dashboard_collection: str = "dashboard_agregados"
     mongo_users_collection: str = "usuarios"
     mongo_batch_size: int = Field(default=5_000, ge=1)
     mongo_enabled: bool = False

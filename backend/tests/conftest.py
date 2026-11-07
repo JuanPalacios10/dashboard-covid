@@ -11,6 +11,18 @@ import pytest
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(BACKEND_DIR))
 
+@pytest.fixture(autouse=True)
+def disable_mongo_for_tests(monkeypatch):
+    """Aísla las pruebas de una instancia real de MongoDB."""
+
+    from app.config import get_settings
+
+    monkeypatch.setenv("COVID_MONGO_ENABLED", "false")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
 SOURCE_HEADERS = [
     "fecha reporte web",
     "ID de caso",

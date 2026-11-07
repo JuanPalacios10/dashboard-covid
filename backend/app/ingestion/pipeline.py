@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - Windows
     fcntl = None  # type: ignore[assignment]
 
 from .cleaner import clean_chunk
+from .dashboard_aggregates import consolidate_dashboard_from_parquet
 from .dedupe import IdDeduplicator
 from .memory import MemoryMonitor
 from .mongo_writer import MongoWriter
@@ -76,6 +77,8 @@ class IngestionConfig:
     mongo_database: str = "covid_dashboard"
     mongo_cases_collection: str = "casos_covid"
     mongo_summary_collection: str = "resumen_diario_municipios"
+    mongo_kpis_collection: str = "kpis_gerenciales"
+    mongo_dashboard_collection: str = "dashboard_agregados"
     mongo_batch_size: int = 5_000
 
     def __post_init__(self) -> None:
@@ -256,6 +259,8 @@ def run_ingestion(
                 database=config.mongo_database,
                 cases_collection=config.mongo_cases_collection,
                 summary_collection=config.mongo_summary_collection,
+                kpis_collection=config.mongo_kpis_collection,
+                dashboard_collection=config.mongo_dashboard_collection,
                 batch_size=config.mongo_batch_size,
             )
             if config.mongo_enabled
@@ -366,8 +371,13 @@ def run_ingestion(
             rejected_writer.close()
             cleanup_writers.clear()
 
-            if mongo_writer is not None:
+            if mongo_writer is not None and cases_writer.rows_written:
                 mongo_writer.consolidate_summary()
+                consolidate_dashboard_from_parquet(
+                    staging_cases,
+                    mongo_writer.dashboard,
+                    mongo_writer.kpis,
+                )
 
             rejected_path: Path | None = None
             if rejected_writer.rows_written > 0:

@@ -50,3 +50,28 @@ export const authApi = {
     return data;
   },
 };
+
+export const kpiApi = {
+  gerenciales: async (token, { anio = 'acumulado', signal } = {}) => {
+    const { data } = await api.get('/kpis/gerenciales', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { anio },
+      signal,
+    });
+    return data;
+  },
+};
+
+export const dashboardApi = {
+  resumen: async (token, { anio = 'acumulado', departamento, signal } = {}) => {
+    const { data } = await api.get('/dashboard', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        anio,
+        ...(departamento ? { departamento } : {}),
+      },
+      signal,
+    });
+    return data;
+  },
+};

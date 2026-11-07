@@ -1,8 +1,9 @@
 # Dashboard COVID-19 Colombia
 
 Backend para procesar y analizar los casos positivos de COVID-19 en Colombia.
-La **fase 1** implementa la limpieza y normalización del dataset con Pandas y
-una ingesta por chunks que no satura la memoria del servidor.
+Incluye la limpieza y normalización del dataset con Pandas, una ingesta por
+chunks que no satura la memoria del servidor y un tablero gerencial servido
+desde agregados precalculados en MongoDB.
 
 ## Estado
 
@@ -12,8 +13,9 @@ una ingesta por chunks que no satura la memoria del servidor.
 - ✅ Deduplicación global por `id_caso` con memoria acotada.
 - ✅ Salida Parquet particionada por año + manifiesto de calidad en JSON.
 - ✅ API FastAPI para lanzar y consultar la ingesta.
-- ✅ 18 pruebas automatizadas.
-- ⏳ Persistencia en base de datos y endpoints del dashboard (fase 2).
+- ✅ Persistencia MongoDB de casos, KPIs y agregados del tablero.
+- ✅ Tablero por año: KPIs históricos, tendencia, territorio, sexo, edad y calor.
+- ✅ 49 pruebas automatizadas.
 
 ## Estructura
 
@@ -22,18 +24,23 @@ dashboard-covid/
 ├── backend/
 │   ├── app/
 │   │   ├── api/routes.py          # Endpoints de ingesta
+│   │   ├── api/kpis.py            # KPIs gerenciales
+│   │   ├── api/dashboard.py       # Tablero compuesto preagregado
 │   │   ├── ingestion/
 │   │   │   ├── schema.py          # Columnas, tipos y catálogo DANE
 │   │   │   ├── cleaner.py         # Normalización y validación por chunk
 │   │   │   ├── dedupe.py          # Deduplicación de id_caso
 │   │   │   ├── writer.py          # Parquet particionado incremental
+│   │   │   ├── dashboard_aggregates.py  # Agregados del tablero
 │   │   │   ├── memory.py          # Monitor de RAM
 │   │   │   ├── stats.py           # Métricas de calidad
 │   │   │   ├── report.py          # Manifiesto JSON
 │   │   │   └── pipeline.py        # Orquestador
 │   │   ├── services/jobs.py       # Job en segundo plano de la API
+│   │   ├── services/kpis.py       # Consulta de KPIs preagregados
+│   │   ├── services/dashboard.py  # Consulta de agregados del tablero
 │   │   ├── config.py              # Configuración por variables de entorno
-│   │   ├── database.py            # Reservado para la fase 2
+│   │   ├── database.py            # Conexión y repositorios MongoDB
 │   │   └── main.py                # Aplicación FastAPI
 │   ├── scripts/ingest_dataset.py  # CLI de ingesta
 │   ├── tests/
@@ -174,6 +181,16 @@ En la corrida de referencia: **6.390.971 filas**, **33 departamentos**,
 
 ## API
 
+MongoDB debe estar disponible en `mongodb://localhost:27017`. Una opción local
+con Podman es:
+
+```bash
+podman run -d --name covid-mongo \
+  -p 27017:27017 \
+  -v covid-mongo-data:/data/db \
+  docker.io/library/mongo:7
+```
+
 ```bash
 cd backend
 uvicorn app.main:app --reload
@@ -189,6 +206,8 @@ uvicorn app.main:app --reload
 | `POST` | `/api/v1/auth/login` | Inicio de sesión; devuelve JWT y perfil. |
 | `GET` | `/api/v1/auth/me` | Perfil del usuario autenticado. |
 | `POST` | `/api/v1/auth/users` | Crear usuario (restringido a rol `admin`). |
+| `GET` | `/api/v1/kpis/gerenciales?anio=acumulado` | KPIs nacionales preagregados; acepta `acumulado` o `2020`–`2024`; requiere JWT. |
+| `GET` | `/api/v1/dashboard?anio=2021&departamento=05` | Tablero completo preagregado: KPIs, series, territorio, demografía y calor; requiere JWT. |
 
 Ejemplo:
 
@@ -198,6 +217,25 @@ curl -X POST http://127.0.0.1:8000/api/v1/ingesta \
   -d '{"chunk_size": 100000, "memory_limit_mb": 1024, "overwrite": true}'
 
 curl http://127.0.0.1:8000/api/v1/ingesta/estado
+```
+
+Para cargar la capa Parquet existente en MongoDB y consolidar los agregados del tablero:
+
+```bash
+cd backend
+python scripts/load_parquet_to_mongo.py --reset
+```
+
+El script usa inserción masiva para la carga inicial y reconstruye los
+documentos de `kpis_gerenciales` y `dashboard_agregados` desde Parquet. Si los
+casos ya están cargados, se pueden recalcular solo los agregados con
+`--skip-load`; para actualizar por `id_caso` se usa `--upsert`.
+
+Con el backend en ejecución, se puede medir el percentil 95 de los endpoints:
+
+```bash
+python scripts/benchmark_kpis.py --requests 100
+python scripts/benchmark_dashboard.py --requests 100
 ```
 
 La documentación interactiva está en `http://127.0.0.1:8000/docs`.
@@ -227,6 +265,11 @@ python scripts/create_user.py --seed
 Rutas del frontend: `/` (landing), `/login`, `/register` y `/dashboard`
 (protegida: sin sesión redirige a `/login`).
 
+El tablero consume `/api/v1/dashboard`. Los KPIs, la tendencia, la
+distribución territorial, el sexo, la edad y el mapa de calor usan datos
+reales de MongoDB; las pestañas de proyecciones e informes siguen siendo
+demostrativas.
+
 ## Criterios de aceptación
 
 | Criterio | Implementación |
@@ -246,8 +289,9 @@ ruff check app scripts tests
 ```
 
 Las pruebas cubren normalización, rechazos, deduplicación entre chunks,
-particionado, límites de memoria, esquema incompleto, JSON Lines y endpoints
-básicos (incluida una ingesta en segundo plano).
+particionado, límites de memoria, esquema incompleto, JSON Lines, endpoints
+básicos (incluida una ingesta en segundo plano), contrato del tablero y las
+definiciones históricas de fallecidos, recuperados y activos.
 
 ## Documentación
 
@@ -256,8 +300,7 @@ básicos (incluida una ingesta en segundo plano).
 
 ## Próximos pasos
 
-1. Cargar el Parquet limpio a PostgreSQL o MongoDB en lotes.
-2. Crear endpoints de indicadores: series temporales, departamentos,
-   municipios, edad, letalidad y recuperación.
-3. Construir el frontend del dashboard.
-4. Programar ingestas automáticas y monitoreo.
+1. Programar ingestas automáticas y monitoreo.
+2. Agregar filtros municipales detallados y comparación entre municipios.
+3. Incorporar proyecciones, informes PDF y microdatos con sus propios
+   endpoints y controles de acceso.

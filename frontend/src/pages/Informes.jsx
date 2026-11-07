@@ -3,10 +3,9 @@ import Card from '../components/ui/Card.jsx';
 import { DEPTS, TODAY, simulate, summarize } from '../data/mock.js';
 import { dec, fmt, pct, sum } from '../utils/format.js';
 
-export default function Informes({ view, terr, sim, toast }) {
+export default function Informes({ view, terrName, sim, toast }) {
   const [dest, setDest] = useState('Consejo de gobierno');
   const [incl, setIncl] = useState(true);
-  const terrName = terr === 'all' ? 'Nacional' : DEPTS.find((d) => d.id === terr).name;
   const top5 = DEPTS.map((d) => ({ n: d.name, v: sum(d.series.slice(-7)) / (d.pop * 10) }))
     .sort((a, b) => b.v - a.v)
     .slice(0, 5);
@@ -29,7 +28,7 @@ export default function Informes({ view, terr, sim, toast }) {
         <div className="field">
           <span className="flabel">Territorio</span>
           <span>
-            {terrName} <span className="hint">(según el filtro superior)</span>
+            {terrName} <span className="hint">(demostrativo; cifras nacionales de ejemplo)</span>
           </span>
         </div>
         <label className="chk" htmlFor="incl">
