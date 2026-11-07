@@ -50,3 +50,48 @@ export const authApi = {
     return data;
   },
 };
+
+export const kpiApi = {
+  gerenciales: async (token, { anio = 'acumulado', signal } = {}) => {
+    const { data } = await api.get('/kpis/gerenciales', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { anio },
+      signal,
+    });
+    return data;
+  },
+};
+
+export const dashboardApi = {
+  resumen: async (token, { anio = 'acumulado', departamento, signal } = {}) => {
+    const { data } = await api.get('/dashboard', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        anio,
+        ...(departamento ? { departamento } : {}),
+      },
+      signal,
+    });
+    return data;
+  },
+};
+
+export const proyeccionApi = {
+  obtener: async (
+    token,
+    { anio = 'acumulado', departamento, horizonte = 60, r, medidas = 40, signal } = {},
+  ) => {
+    const { data } = await api.get('/proyecciones', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        anio,
+        horizonte,
+        medidas,
+        ...(departamento ? { departamento } : {}),
+        ...(r != null ? { r } : {}),
+      },
+      signal,
+    });
+    return data;
+  },
+};

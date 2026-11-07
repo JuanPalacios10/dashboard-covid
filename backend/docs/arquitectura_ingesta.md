@@ -71,6 +71,74 @@ impiden dos ingestas simultáneas.
 - Volver a ejecutar con `--overwrite` reconstruye la capa desde cero; el
   manifiesto conserva el historial de corridas.
 
+## Persistencia y agregados del tablero
+
+Cuando `COVID_MONGO_ENABLED=true`, la ingesta escribe los casos en
+`casos_covid` y, al finalizar, reconstruye los agregados desde la capa Parquet
+de staging, antes de publicarla:
+
+- `resumen_diario_municipios`: totales por fecha y municipio.
+- `kpis_gerenciales`: un documento acumulado (`_id = "nacional"`) y un
+  documento por año (`_id = "2020"` … `_id = "2024"`).
+- `dashboard_agregados`: series nacionales y por departamento, territorios,
+  demografía y mapa de calor.
+
+### Definiciones históricas
+
+Para que los activos sean históricos y no un residual del estado actual:
+
+- **Fallecido**: `fecha_muerte` no nula y menor o igual al corte.
+- **Recuperado**: `fecha_recuperacion` no nula y menor o igual al corte, sin
+  `fecha_muerte` anterior o igual al corte.
+- **Activo**: sin ninguna de las dos fechas terminales antes o igual al corte.
+
+En la vista por año se usa la cohorte de casos reportados en ese año y su
+estado al cierre del año. En la vista acumulada se usa el corte real del
+dataset (`2024-01-17`). Esto cambia las cifras frente a un residual por
+estado: al corte acumulado quedan 184.393 fallecidos, 6.203.632 recuperados y
+2.946 activos.
+
+La consulta de la API nunca agrega `casos_covid` en tiempo de request: cada
+endpoint lee uno o pocos documentos por `_id` en `kpis_gerenciales` o
+`dashboard_agregados`.
+
+### Proyecciones
+
+La pestaña de proyecciones usa documentos
+`proyeccion:nacional:{periodo}` y
+`proyeccion:departamento:{codigo}:{periodo}` dentro de
+`dashboard_agregados`. Cada documento guarda:
+
+- los últimos 56 días de la serie diaria;
+- los activos totales al corte, calculados con fechas reales;
+- el R estimado del período;
+- la calidad de la base (alta, media o baja);
+- la serie observada posterior al corte, cuando existe.
+
+El endpoint `GET /api/v1/proyecciones` ejecuta un modelo de onda epidémica
+amortiguada con capacidad derivada del máximo histórico de la serie. Acepta
+horizontes de 30, 60, 90, 180 y 365 días; el valor por defecto es un año.
+Devuelve escenarios optimista, moderado, pesimista y personalizado, bandas
+aproximadas al 80 %, y backtesting para 2020–2023. No usa población ni
+capacidad UCI inventada; la saturación de camas UCI se retiró porque el
+dataset no contiene esa información.
+
+En 2024 solo hay 15 días de base, por lo que la calidad se marca como baja y
+la proyección debe interpretarse como indicativa. En 2023 el backtesting es
+parcial porque los datos posteriores llegan hasta 2024-01-17.
+
+Para cargar la capa Parquet existente sin reejecutar la ingesta:
+
+```bash
+python scripts/load_parquet_to_mongo.py --reset
+```
+
+Para recalcular solo los agregados desde Parquet:
+
+```bash
+python scripts/load_parquet_to_mongo.py --skip-load
+```
+
 ## API
 
 `app/api/routes.py` expone un job en segundo plano:
@@ -78,6 +146,15 @@ impiden dos ingestas simultáneas.
 - `POST /api/v1/ingesta` inicia la ingesta (202) y devuelve el estado inicial.
 - `GET /api/v1/ingesta/estado` devuelve el job actual y el último manifiesto.
 - `GET /api/v1/ingesta/manifiestos?limite=10` lista corridas recientes.
+- `GET /api/v1/kpis/gerenciales?anio=2021` devuelve los KPIs nacionales del
+  período (`acumulado` o `2020`–`2024`). Requiere JWT con rol `admin`,
+  `analista` o `ejecutivo`.
+- `GET /api/v1/dashboard?anio=2021&departamento=05` devuelve el tablero
+  compuesto (KPIs, series, territorios, demografía y calor) desde
+  `dashboard_agregados`. Requiere el mismo control de roles.
+- `GET /api/v1/proyecciones?anio=2021&departamento=05&horizonte=365` devuelve
+  la base histórica, los escenarios, las bandas y el backtesting. También
+  requiere JWT con rol `admin`, `analista` o `ejecutivo`.
 
 El estado del job vive en memoria del proceso; el resultado durable es el
 manifiesto JSON. Para despliegues con varios workers se recomienda mover el
@@ -85,9 +162,6 @@ estado a Redis/DB o ejecutar la ingesta como tarea de un worker dedicado.
 
 ## Siguiente fase (fuera de alcance)
 
-1. Cargar la capa Parquet a PostgreSQL/MongoDB en lotes (reutilizando el
-   manifiesto y los tipos ya normalizados).
-2. Endpoints de dashboard: series temporales, casos por departamento/municipio,
-   pirámide de edad, letalidad y recuperación.
-3. Frontend del dashboard.
-4. Programación de ingestas (cron/worker) y monitoreo.
+1. Programación de ingestas (cron/worker) y monitoreo.
+2. Filtros municipales detallados y comparación entre municipios.
+3. Informes PDF y microdatos con endpoints propios.

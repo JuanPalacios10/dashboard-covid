@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from time import perf_counter
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.auth import router as auth_router
+from .api.dashboard import router as dashboard_router
+from .api.kpis import router as kpis_router
+from .api.projections import router as projections_router
 from .api.routes import router
 from .config import get_settings
 
@@ -30,6 +35,20 @@ app.add_middleware(
 
 app.include_router(router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(kpis_router, prefix="/api/v1")
+app.include_router(dashboard_router, prefix="/api/v1")
+app.include_router(projections_router, prefix="/api/v1")
+
+
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    """Expone el tiempo de procesamiento del backend para medir el SLA."""
+
+    started = perf_counter()
+    response = await call_next(request)
+    elapsed_ms = (perf_counter() - started) * 1_000
+    response.headers["X-Process-Time"] = f"{elapsed_ms:.2f}ms"
+    return response
 
 
 @app.get("/", tags=["sistema"])

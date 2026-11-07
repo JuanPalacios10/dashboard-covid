@@ -1,21 +1,50 @@
 import React, { useState } from 'react';
 import Card from '../ui/Card.jsx';
-import { DAYS, DEPTS, dateAt } from '../../data/mock.js';
-import { dShort, dec, sum } from '../../utils/format.js';
+import { fmt } from '../../utils/format.js';
 
-export default function Heatmap({ terr }) {
+export default function Heatmap({ heatmap, periodo, terr }) {
   const [hov, setHov] = useState(null);
-  const W = 12,
-    start = DAYS - W * 7;
-  const cells = DEPTS.map((d) =>
-    Array.from({ length: W }, (_, k) => sum(d.series.slice(start + 7 * k, start + 7 * k + 7)) / (d.pop * 10)),
-  );
-  const max = Math.max(...cells.flat());
-  const wl = (k) => dShort(dateAt(start + 7 * k)) + ' – ' + dShort(dateAt(start + 7 * k + 6));
+
+  if (!heatmap?.filas?.length) {
+    return (
+      <Card title="Mapa de calor">
+        <p className="note">Sin datos de calor para este período.</p>
+      </Card>
+    );
+  }
+
+  const { columnas } = heatmap;
+  const filas = heatmap.filas.slice(0, 12);
+  if (terr !== 'all') {
+    const selected = heatmap.filas.find((row) => row.codigo === terr);
+    if (selected && !filas.some((row) => row.codigo === terr)) {
+      filas[filas.length - 1] = selected;
+    }
+  }
+  const visibleCodes = new Set(filas.map((row) => row.codigo));
+  const rest = heatmap.filas.filter((row) => !visibleCodes.has(row.codigo));
+  if (rest.length) {
+    const valores = columnas.map((_, index) =>
+      rest.reduce((sum, row) => sum + row.valores[index], 0),
+    );
+    filas.push({
+      codigo: 'otros',
+      nombre: 'Otros departamentos',
+      total: valores.reduce((sum, value) => sum + value, 0),
+      valores,
+    });
+  }
+  const max = Math.max(...filas.flatMap((row) => row.valores), 1);
+  const sub =
+    periodo === 'anual'
+      ? `Casos por departamento y mes (principales + Otros) · Año ${heatmap.anio}`
+      : 'Casos por departamento y año (principales + Otros) · Acumulado';
+  const hovered = hov ? filas[hov[0]] : null;
+
   return (
     <Card
-      title="Mapa de calor semanal"
-      sub="Casos por 100 mil habitantes, últimas 12 semanas"
+      title="Mapa de calor"
+      sub={sub}
       right={
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--muted)' }}>
           menos <span className="ramp"></span> más
@@ -23,40 +52,48 @@ export default function Heatmap({ terr }) {
       }
     >
       <div className="hmread num" aria-live="polite">
-        {hov ? (
+        {hovered ? (
           <>
-            <b>{DEPTS[hov[0]].name}</b> · semana {wl(hov[1])} · {dec(cells[hov[0]][hov[1]], 1)} por 100 mil
+            <b>{hovered.nombre}</b> · {columnas[hov[1]]} ·{' '}
+            {fmt(hovered.valores[hov[1]])} casos
           </>
         ) : (
           'Pase el cursor sobre una celda para ver el valor.'
         )}
       </div>
-      <div className="hm" style={{ gridTemplateColumns: '112px repeat(' + W + ',minmax(0,1fr))' }}>
-        {DEPTS.map((d, r) => (
-          <React.Fragment key={d.id}>
-            <span className={'rn' + (terr === d.id ? ' sel' : '')}>{d.name}</span>
-            {cells[r].map((v, k) => (
+      <div
+        className="hm"
+        style={{
+          gridTemplateColumns: '112px repeat(' + columnas.length + ',minmax(0,1fr))',
+        }}
+      >
+        {filas.map((row, rowIndex) => (
+          <React.Fragment key={row.codigo}>
+            <span className={'rn' + (terr === row.codigo ? ' sel' : '')}>
+              {row.nombre}
+            </span>
+            {row.valores.map((value, columnIndex) => (
               <button
-                key={k}
+                key={columnIndex}
                 className="c"
-                aria-label={d.name + ', semana ' + wl(k) + ': ' + dec(v, 1)}
+                aria-label={`${row.nombre}, ${columnas[columnIndex]}: ${fmt(value)} casos`}
                 style={{
                   background:
                     'color-mix(in srgb, var(--teal) ' +
-                    Math.round(8 + 92 * Math.pow(v / max, 1.1)) +
+                    Math.round(8 + 92 * Math.pow(value / max, 1.1)) +
                     '%, var(--surface))',
                 }}
-                onPointerEnter={() => setHov([r, k])}
-                onFocus={() => setHov([r, k])}
+                onPointerEnter={() => setHov([rowIndex, columnIndex])}
+                onFocus={() => setHov([rowIndex, columnIndex])}
                 onPointerLeave={() => setHov(null)}
               ></button>
             ))}
           </React.Fragment>
         ))}
         <span></span>
-        {Array.from({ length: W }, (_, k) => (
-          <span key={k} className="axis" style={{ textAlign: 'center' }}>
-            {k % 3 === 0 ? dShort(dateAt(start + 7 * k)) : ''}
+        {columnas.map((column, index) => (
+          <span key={index} className="axis" style={{ textAlign: 'center' }}>
+            {column}
           </span>
         ))}
       </div>

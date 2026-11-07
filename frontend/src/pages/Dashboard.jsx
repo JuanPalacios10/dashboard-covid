@@ -2,34 +2,82 @@ import { useState, useEffect, useMemo } from 'react';
 import Rail from '../components/Rail.jsx';
 import { Icon } from '../components/ui/Icons.jsx';
 import { useAuth } from '../context/auth.js';
-import { DEPTS, getView } from '../data/mock.js';
+import { getView } from '../data/mock.js';
+import { dashboardApi, getApiErrorMessage } from '../utils/api.js';
+import { dLong } from '../utils/format.js';
 import { roleLabel } from '../utils/roles.js';
 import Informes from './Informes.jsx';
 import Proyecciones from './Proyecciones.jsx';
 import Resumen from './Resumen.jsx';
 
+const PERIODOS = [
+  ['acumulado', 'Acumulado'],
+  ['2020', '2020'],
+  ['2021', '2021'],
+  ['2022', '2022'],
+  ['2023', '2023'],
+  ['2024', '2024'],
+];
+
 export default function Dashboard({ onExit, toast }) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [tab, setTab] = useState('resumen');
-  const [range, setRange] = useState(60);
+  const [anio, setAnio] = useState('acumulado');
   const [terr, setTerr] = useState('all');
   const [sim, setSim] = useState({ R: 1.3, m: 40 });
-  const [live, setLive] = useState(() => ({ lat: 238, extra: 0, t: new Date(), flash: 0 }));
+  const [data, setData] = useState(null);
+  const [loadState, setLoadState] = useState({ loading: true, error: '' });
+
   useEffect(() => {
-    const id = setInterval(
-      () =>
-        setLive((p) => ({
-          lat: 180 + Math.floor(Math.random() * 240),
-          extra: p.extra + Math.floor(Math.random() * 7),
-          t: new Date(),
-          flash: p.flash + 1,
-        })),
-      5000,
-    );
-    return () => clearInterval(id);
-  }, []);
-  const view = useMemo(() => getView(terr), [terr]);
-  const hhmm = live.t.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    if (!token) return undefined;
+
+    const controller = new AbortController();
+
+    dashboardApi
+      .resumen(token, {
+        anio,
+        departamento: terr === 'all' ? undefined : terr,
+        signal: controller.signal,
+      })
+      .then((payload) => {
+        if (controller.signal.aborted) return;
+        setData(payload);
+        setLoadState({ loading: false, error: '' });
+      })
+      .catch((error) => {
+        if (controller.signal.aborted) return;
+        setData(null);
+        setLoadState({ loading: false, error: getApiErrorMessage(error) });
+      });
+
+    return () => controller.abort();
+  }, [token, anio, terr]);
+
+  const changeAnio = (value) => {
+    setAnio(value);
+    setLoadState({ loading: true, error: '' });
+  };
+  const changeTerr = (event) => {
+    setTerr(event.target.value);
+    setLoadState({ loading: true, error: '' });
+  };
+
+  // Proyecciones e informes siguen usando el modelo demostrativo.
+  const view = useMemo(() => getView('all'), []);
+  const fechaCorte = data?.fecha_corte
+    ? dLong(new Date(`${data.fecha_corte}T00:00:00`))
+    : null;
+  const actualizado = data?.actualizado_en
+    ? new Date(data.actualizado_en).toLocaleTimeString('es-CO', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null;
+  const departamentos = data?.territorios?.departamentos ?? [];
+  const terrName =
+    terr === 'all'
+      ? 'Nacional'
+      : departamentos.find((item) => item.codigo === terr)?.nombre ?? 'Departamento';
   const tabs = [
     ['resumen', 'Resumen'],
     ['proyecciones', 'Proyecciones'],
@@ -63,8 +111,20 @@ export default function Dashboard({ onExit, toast }) {
           </button>
         </nav>
         <span className="sp"></span>
-        <span className="live num" title="Valores simulados">
-          <b></b>En vivo · {live.lat} ms · {hhmm}
+        <span
+          className="live num"
+          title={
+            actualizado
+              ? `Indicadores actualizados a las ${actualizado}`
+              : 'Estado de los indicadores'
+          }
+        >
+          <b></b>
+          {loadState.loading
+            ? 'Cargando indicadores…'
+            : data
+              ? `Datos al ${fechaCorte}`
+              : 'Indicadores no disponibles'}
         </span>
         <span className="role">
           {user?.full_name ? `${user.full_name} · ` : ''}Rol: <strong>{roleLabel(user?.role)}</strong>
@@ -79,9 +139,14 @@ export default function Dashboard({ onExit, toast }) {
             Período
           </span>
           <div className="chips" role="group" aria-labelledby="f-per">
-            {[30, 60, 90, 120].map((r) => (
-              <button key={r} className="chip" aria-pressed={range === r} onClick={() => setRange(r)}>
-                {r} días
+            {PERIODOS.map(([value, label]) => (
+              <button
+                key={value}
+                className="chip"
+                aria-pressed={anio === value}
+                onClick={() => changeAnio(value)}
+              >
+                {label}
               </button>
             ))}
           </div>
@@ -90,24 +155,52 @@ export default function Dashboard({ onExit, toast }) {
           <label className="flabel" htmlFor="f-terr">
             Territorio
           </label>
-          <select id="f-terr" value={terr} onChange={(e) => setTerr(e.target.value)}>
+          <select id="f-terr" value={terr} onChange={changeTerr}>
             <option value="all">Nacional (todos los departamentos)</option>
-            {DEPTS.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
+            {departamentos.map((d) => (
+              <option key={d.codigo} value={d.codigo}>
+                {d.nombre}
               </option>
             ))}
           </select>
         </div>
       </div>
       <div className="shell">
-        <Rail view={view} live={live} />
-        {tab === 'resumen' && <Resumen view={view} range={range} terr={terr} />}
-        {tab === 'proyecciones' && <Proyecciones view={view} sim={sim} setSim={setSim} />}
-        {tab === 'informes' && <Informes view={view} terr={terr} sim={sim} toast={toast} />}
+        <Rail
+          kpis={data?.kpis}
+          periodo={data?.periodo ?? anio}
+          anio={data?.anio}
+          loading={loadState.loading}
+          error={loadState.error}
+        />
+        {tab === 'resumen' && (
+          <Resumen
+            data={data}
+            loading={loadState.loading}
+            error={loadState.error}
+            terr={terr}
+            terrName={terrName}
+          />
+        )}
+        {tab === 'proyecciones' && (
+          <Proyecciones
+            token={token}
+            anio={anio}
+            terr={terr}
+            terrName={terrName}
+            sim={sim}
+            setSim={setSim}
+          />
+        )}
+        {tab === 'informes' && (
+          <Informes view={view} terrName={terrName} sim={sim} toast={toast} />
+        )}
       </div>
       <footer className="foot">
-        <span>Datos de ejemplo generados localmente, sin relación con cifras oficiales.</span>
+        <span>
+          KPIs, tendencia, territorio, sexo, edad, mapa de calor y proyecciones desde MongoDB.
+          Informes sigue siendo demostrativo.
+        </span>
         <span>Este rol no accede a microdatos individuales ni a administración e ingesta.</span>
       </footer>
     </div>

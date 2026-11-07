@@ -106,6 +106,8 @@ def main() -> int:
         mongo_database=settings.mongo_database,
         mongo_cases_collection=settings.mongo_cases_collection,
         mongo_summary_collection=settings.mongo_summary_collection,
+        mongo_kpis_collection=settings.mongo_kpis_collection,
+        mongo_dashboard_collection=settings.mongo_dashboard_collection,
         mongo_batch_size=settings.mongo_batch_size,
     )
 

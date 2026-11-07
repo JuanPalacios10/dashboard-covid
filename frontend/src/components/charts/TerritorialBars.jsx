@@ -1,20 +1,51 @@
 import { useState } from 'react';
 import Card from '../ui/Card.jsx';
 import Seg from '../ui/Seg.jsx';
-import { DEPTS } from '../../data/mock.js';
-import { dec, fmt, sum } from '../../utils/format.js';
+import { fmt, pct } from '../../utils/format.js';
 
-export default function TerritorialBars({ range, terr }) {
+export default function TerritorialBars({ territorios, periodo, terr }) {
   const [metric, setMetric] = useState('casos');
-  const rows = DEPTS.map((d) => {
-    const c = sum(d.series.slice(-range));
-    return { d, c, inc: c / (d.pop * 10) };
-  }).sort((a, b) => (metric === 'casos' ? b.c - a.c : b.inc - a.inc));
-  const max = Math.max(...rows.map((r) => (metric === 'casos' ? r.c : r.inc)));
+  if (!territorios?.departamentos?.length) {
+    return (
+      <Card title="Distribución territorial">
+        <p className="note">Sin datos territoriales para este período.</p>
+      </Card>
+    );
+  }
+
+  const allRows = territorios.departamentos;
+  const rows = allRows.slice(0, 12);
+  if (terr !== 'all') {
+    const selected = allRows.find((row) => row.codigo === terr);
+    if (selected && !rows.some((row) => row.codigo === terr)) {
+      rows[rows.length - 1] = selected;
+    }
+  }
+  const visibleCodes = new Set(rows.map((row) => row.codigo));
+  const rest = allRows.filter((row) => !visibleCodes.has(row.codigo));
+  if (rest.length) {
+    const total = rest.reduce((sum, row) => sum + row.total, 0);
+    const fallecidos = rest.reduce((sum, row) => sum + row.fallecidos, 0);
+    const participacion = rest.reduce((sum, row) => sum + row.participacion, 0);
+    rows.push({
+      codigo: 'otros',
+      nombre: 'Otros departamentos',
+      total,
+      fallecidos,
+      tasa_letalidad: total ? fallecidos / total : 0,
+      participacion,
+    });
+  }
+  const valueOf = (row) =>
+    metric === 'casos' ? row.total : row.tasa_letalidad * 100;
+  const max = Math.max(...rows.map(valueOf), 1);
+  const periodoLabel =
+    periodo === 'anual' ? `Año ${territorios.anio}` : 'Acumulado';
+
   return (
     <Card
       title="Distribución territorial"
-      sub={'Últimos ' + range + ' días'}
+      sub={`Casos confirmados por departamento (principales + Otros) · ${periodoLabel}`}
       right={
         <Seg
           label="Métrica"
@@ -22,27 +53,34 @@ export default function TerritorialBars({ range, terr }) {
           onChange={setMetric}
           options={[
             ['casos', 'Casos'],
-            ['inc', 'Por 100 mil'],
+            ['let', 'Letalidad'],
           ]}
         />
       }
     >
       <div>
-        {rows.map((r) => {
-          const v = metric === 'casos' ? r.c : r.inc;
+        {rows.map((row) => {
+          const value = valueOf(row);
           return (
             <div
-              key={r.d.id}
-              className={'brow' + (terr === r.d.id ? ' sel' : '')}
+              key={row.codigo}
+              className={'brow' + (terr === row.codigo ? ' sel' : '')}
               title={
-                r.d.name + ': ' + (metric === 'casos' ? fmt(v) + ' casos' : dec(v, 1) + ' por 100 mil hab.')
+                `${row.nombre}: ${fmt(row.total)} casos · ` +
+                `${pct(row.participacion)} del total · ` +
+                `letalidad ${pct(row.tasa_letalidad * 100, 2)}`
               }
             >
-              <span className="n">{r.d.name}</span>
+              <span className="n">{row.nombre}</span>
               <div>
-                <div className="bar" style={{ width: Math.max(2, (v / max) * 100) + '%' }}></div>
+                <div
+                  className="bar"
+                  style={{ width: Math.max(2, (value / max) * 100) + '%' }}
+                ></div>
               </div>
-              <span className="v num">{metric === 'casos' ? fmt(v) : dec(v, 1)}</span>
+              <span className="v num">
+                {metric === 'casos' ? fmt(value) : pct(value, 2)}
+              </span>
             </div>
           );
         })}

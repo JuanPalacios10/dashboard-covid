@@ -2,14 +2,28 @@ import { useState } from 'react';
 import { useSize } from '../../hooks/useSize.js';
 import { compact, fmt, niceMax } from '../../utils/format.js';
 
-export default function LinesChart({ short, long, series, height = 250, hline, marker, endLabels, aria }) {
+export default function LinesChart({
+  short,
+  long,
+  series,
+  height = 250,
+  hline,
+  marker,
+  markerLabel = 'Hoy',
+  endLabels,
+  bands = [],
+  aria,
+}) {
   const [ref, w] = useSize();
   const [hi, setHi] = useState(null);
   const m = { l: 44, r: endLabels ? 96 : 14, t: 14, b: 26 };
   const iw = Math.max(10, w - m.l - m.r),
     ih = height - m.t - m.b,
     n = short.length;
-  const vals = series.flatMap((s) => s.values).filter((v) => v != null);
+  const vals = [
+    ...series.flatMap((s) => s.values),
+    ...bands.flatMap((band) => [...band.lower, ...band.upper]),
+  ].filter((v) => v != null);
   const top = niceMax(Math.max(...vals, hline ? hline.v : 0, 1) * 1.04);
   const X = (i) => m.l + (iw * i) / (n - 1),
     Y = (v) => m.t + ih * (1 - v / top);
@@ -30,6 +44,7 @@ export default function LinesChart({ short, long, series, height = 250, hline, m
   };
   const area = (s) => {
     const ix = s.values.map((v, i) => (v == null ? -1 : i)).filter((i) => i >= 0);
+    if (!ix.length) return '';
     return (
       path(s) +
       'L' +
@@ -42,6 +57,36 @@ export default function LinesChart({ short, long, series, height = 250, hline, m
       Y(0) +
       'Z'
     );
+  };
+  const bandPaths = (band) => {
+    const segments = [];
+    let start = null;
+    for (let i = 0; i < n; i += 1) {
+      const visible = band.lower[i] != null && band.upper[i] != null;
+      if (visible && start == null) start = i;
+      if (!visible && start != null) {
+        segments.push([start, i - 1]);
+        start = null;
+      }
+    }
+    if (start != null) segments.push([start, n - 1]);
+    return segments.map(([from, to], index) => {
+      let d = '';
+      for (let i = from; i <= to; i += 1) {
+        d += (i === from ? 'M' : 'L') + X(i).toFixed(1) + ' ' + Y(band.upper[i]).toFixed(1);
+      }
+      for (let i = to; i >= from; i -= 1) {
+        d += 'L' + X(i).toFixed(1) + ' ' + Y(band.lower[i]).toFixed(1);
+      }
+      return (
+        <path
+          key={`band-${band.name || 'custom'}-${index}`}
+          d={d + 'Z'}
+          fill={band.color || 'var(--sim)'}
+          opacity={band.opacity ?? 0.12}
+        />
+      );
+    });
   };
   const onMove = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -117,10 +162,11 @@ export default function LinesChart({ short, long, series, height = 250, hline, m
               strokeDasharray="3 3"
             />
             <text className="axis" x={X(marker) - 5} y={m.t + 10} textAnchor="end">
-              Hoy
+              {markerLabel}
             </text>
           </g>
         )}
+        {bands.map((band) => bandPaths(band))}
         {series
           .filter((s) => s.fill)
           .map((s) => (
