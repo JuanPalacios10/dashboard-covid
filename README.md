@@ -48,10 +48,26 @@ dashboard-covid/
 
 ## Requisitos
 
+### Backend
+
 - Python 3.11 o superior (probado con 3.14).
 - ~1 GB de RAM disponible para el proceso (con `chunk_size=100.000`).
+- MongoDB 6.0 o superior en `mongodb://localhost:27017` (persistencia y autenticación).
 - El archivo local `Casos_positivos_de_COVID-19_Colombia.csv` (~1,4 GB).
 - La ingesta acepta CSV o JSON Lines (`.json`, `.jsonl`, `.ndjson`).
+
+### Frontend
+
+- Node.js `^20.19.0` o `>=22.12.0` (requisito de Vite 8).
+- npm 10 o superior (incluido con Node.js).
+- Las dependencias están declaradas en `frontend/package.json` y fijadas en
+  `frontend/package-lock.json`.
+- Ejecutar `npm install` (o `npm ci`) dentro de `frontend/` para generar
+  `node_modules/`; esa carpeta no se versiona (ver `.gitignore`).
+- Un navegador moderno (Chrome, Edge, Firefox o Safari recientes).
+
+> `node_modules/`, `dist/` y los archivos `.env` locales se generan en cada
+> equipo y no deben subirse al repositorio.
 
 ## Instalación
 
@@ -210,9 +226,18 @@ dashboard protegido. El login y el registro devuelven un JWT que se guarda en
 
 ```bash
 cd frontend
-npm install
+npm ci                      # instala dependencias en node_modules/
 cp .env.example .env        # opcional: ajustar VITE_API_URL
 npm run dev
+```
+
+`npm ci` respeta `package-lock.json`; use `npm install` solo si necesita
+actualizar dependencias. Otros comandos disponibles:
+
+```bash
+npm run build               # genera la carpeta dist/
+npm run preview             # sirve la build localmente
+npm run lint                # oxlint
 ```
 
 Por defecto el frontend consume `http://127.0.0.1:8000/api/v1`. El backend debe

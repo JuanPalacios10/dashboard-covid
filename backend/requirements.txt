@@ -1,7 +1,10 @@
 # Dependencias del backend (Python 3.11+; probado con Python 3.14)
+# Las dependencias del frontend se gestionan con npm en frontend/package.json.
 fastapi==0.161.1
+numpy==2.4.6
 pandas==3.1.0
 pyarrow==26.0.0
+pydantic==2.14.3
 pydantic-settings==2.16.1
 python-dotenv==1.2.4
 uvicorn==0.54.0
