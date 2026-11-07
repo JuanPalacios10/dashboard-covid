@@ -13,9 +13,10 @@ from .dashboard import (
 )
 from .kpis import KpiService, get_kpi_service
 
-HORIZONTES_VALIDOS = frozenset({30, 60, 90})
+HORIZONTES_VALIDOS = frozenset({30, 60, 90, 180, 365})
 GENERATION_DAYS = 5.0
 RECOVERY_DAYS = 10.0
+PEAK_DAYS = 60.0
 Z_80 = 1.2815515655
 
 
@@ -71,11 +72,12 @@ def _project_scenario(
     cutoff: date,
 ) -> dict[str, Any]:
     r_effect = r_base * (1 - 0.5 * medidas / 100)
-    average = float(base.get("promedio_7d_actual", 0) or 0)
+    base_average = float(base.get("promedio_7d_actual", 0) or 0)
+    average = base_average
     active = float(base.get("activos_al_corte", 0) or 0)
     capacity = max(
         float(base.get("max_7d_periodo", 0) or 0) * 2.0,
-        average * 2.0,
+        base_average * 2.0,
         1.0,
     )
 
@@ -86,17 +88,22 @@ def _project_scenario(
     lower_active: list[float] = []
     upper_active: list[float] = []
 
-    for day in range(1, 91):
+    for day in range(1, 366):
         growth = (r_effect - 1) / GENERATION_DAYS
-        saturation = max(0.0, 1.0 - average / capacity)
-        average = max(0.0, average * math.exp(growth * saturation))
+        if growth > 0:
+            sigma = math.sqrt(PEAK_DAYS / growth)
+            wave = math.exp(growth * day - 0.5 * (day / sigma) ** 2)
+        else:
+            wave = math.exp(growth * day)
+        average = min(capacity, max(0.0, base_average * wave))
         recovered = active / RECOVERY_DAYS
         active = max(0.0, active + average - recovered)
 
+        horizon_factor = 1.0 + day / 365.0
         new_sigma = math.sqrt(max(average, 0.0))
         active_sigma = math.sqrt(max(active, 0.0))
-        margin_new = Z_80 * quality_factor * new_sigma
-        margin_active = Z_80 * quality_factor * active_sigma
+        margin_new = Z_80 * quality_factor * horizon_factor * new_sigma
+        margin_active = Z_80 * quality_factor * horizon_factor * active_sigma
 
         full_new.append(round(average, 2))
         full_active.append(round(active, 2))
@@ -131,6 +138,8 @@ def _project_scenario(
             "nuevos_30d": round(sum(full_new[:30])),
             "nuevos_60d": round(sum(full_new[:60])),
             "nuevos_90d": round(sum(full_new[:90])),
+            "nuevos_180d": round(sum(full_new[:180])),
+            "nuevos_365d": round(sum(full_new[:365])),
             "pico_activos": round(max(full_active[:horizonte])),
             "fecha_pico": _date_at(cutoff, peak_index + 1),
             "pico_nuevos": round(max(full_new[:horizonte])),
@@ -163,7 +172,7 @@ class ProyeccionService:
 
         if horizonte not in HORIZONTES_VALIDOS:
             raise ProyeccionValidationError(
-                "El horizonte debe ser 30, 60 o 90 días."
+                "El horizonte debe ser 30, 60, 90, 180 o 365 días."
             )
         if r is not None and not 0.3 <= r <= 3.0:
             raise ProyeccionValidationError(
@@ -284,6 +293,18 @@ class ProyeccionService:
                     )
                 ]
                 mae = sum(absolute_errors) / days
+                actual_total = sum(actual)
+                projected_total = round(sum(projected), 2)
+                total_deviation = (
+                    round(
+                        (projected_total - actual_total)
+                        / actual_total
+                        * 100,
+                        2,
+                    )
+                    if actual_total
+                    else None
+                )
                 relative = [
                     (2 * abs(projected_value - actual_value))
                     / (abs(projected_value) + abs(actual_value))
@@ -301,6 +322,9 @@ class ProyeccionService:
                     "smape": round(sum(relative) / len(relative), 2)
                     if relative
                     else None,
+                    "observado_total": actual_total,
+                    "proyectado_total": projected_total,
+                    "desviacion_total": total_deviation,
                     "dias_comparados": days,
                 }
 

@@ -115,10 +115,11 @@ La pestaña de proyecciones usa documentos
 - la calidad de la base (alta, media o baja);
 - la serie observada posterior al corte, cuando existe.
 
-El endpoint `GET /api/v1/proyecciones` ejecuta un modelo de crecimiento
-amortiguado con capacidad de saturación derivada del máximo histórico de la
-serie. Devuelve escenarios optimista, moderado, pesimista y personalizado,
-bandas aproximadas al 80 %, y backtesting para 2020–2023. No usa población ni
+El endpoint `GET /api/v1/proyecciones` ejecuta un modelo de onda epidémica
+amortiguada con capacidad derivada del máximo histórico de la serie. Acepta
+horizontes de 30, 60, 90, 180 y 365 días; el valor por defecto es un año.
+Devuelve escenarios optimista, moderado, pesimista y personalizado, bandas
+aproximadas al 80 %, y backtesting para 2020–2023. No usa población ni
 capacidad UCI inventada; la saturación de camas UCI se retiró porque el
 dataset no contiene esa información.
 
@@ -151,7 +152,7 @@ python scripts/load_parquet_to_mongo.py --skip-load
 - `GET /api/v1/dashboard?anio=2021&departamento=05` devuelve el tablero
   compuesto (KPIs, series, territorios, demografía y calor) desde
   `dashboard_agregados`. Requiere el mismo control de roles.
-- `GET /api/v1/proyecciones?anio=2021&departamento=05&horizonte=60` devuelve
+- `GET /api/v1/proyecciones?anio=2021&departamento=05&horizonte=365` devuelve
   la base histórica, los escenarios, las bandas y el backtesting. También
   requiere JWT con rol `admin`, `analista` o `ejecutivo`.
 

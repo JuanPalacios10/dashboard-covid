@@ -62,8 +62,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--horizonte",
         type=int,
-        default=60,
-        help="Horizonte de proyección: 30, 60 o 90 días.",
+        default=365,
+        help="Horizonte de proyección: 30, 60, 90, 180 o 365 días.",
     )
     parser.add_argument(
         "--r",

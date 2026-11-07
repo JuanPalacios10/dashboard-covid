@@ -59,6 +59,8 @@ class ResumenEscenario(BaseModel):
     nuevos_30d: int = Field(ge=0)
     nuevos_60d: int = Field(ge=0)
     nuevos_90d: int = Field(ge=0)
+    nuevos_180d: int = Field(ge=0)
+    nuevos_365d: int = Field(ge=0)
     pico_activos: int = Field(ge=0)
     fecha_pico: date
     pico_nuevos: int = Field(ge=0)
@@ -84,6 +86,9 @@ class BacktestProyeccion(BaseModel):
     proyectado: list[float]
     mae: float = Field(ge=0)
     smape: float | None = Field(default=None, ge=0)
+    observado_total: int = Field(ge=0)
+    proyectado_total: float = Field(ge=0)
+    desviacion_total: float | None = None
     dias_comparados: int = Field(ge=0)
 
 
@@ -157,7 +162,7 @@ def _to_response(payload: dict[str, Any]) -> ProyeccionResponse:
     description=(
         "Proyecta casos nuevos y activos usando la base histórica "
         "precalculada. Acepta ``anio=acumulado`` o ``2020``–``2024``, "
-        "``departamento``, ``horizonte`` 30/60/90, ``r`` y ``medidas``."
+        "``departamento``, ``horizonte`` 30/60/90/180/365, ``r`` y ``medidas``."
     ),
 )
 def get_proyecciones(
@@ -185,8 +190,8 @@ def get_proyecciones(
     ] = None,
     horizonte: Annotated[
         int,
-        Query(description="Horizonte de proyección: 30, 60 o 90 días."),
-    ] = 60,
+        Query(description="Horizonte de proyección: 30, 60, 90, 180 o 365 días."),
+    ] = 365,
     r: Annotated[
         float | None,
         Query(description="R base de la simulación personalizada."),

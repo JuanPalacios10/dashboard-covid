@@ -4,7 +4,7 @@ import Card from '../components/ui/Card.jsx';
 import { getApiErrorMessage, proyeccionApi } from '../utils/api.js';
 import { compact, dLong, dShort, dec, fmt, pct } from '../utils/format.js';
 
-const HORIZONTES = [30, 60, 90];
+const HORIZONTES = [30, 60, 90, 180, 365];
 const PREVIEW_DAYS = 14;
 const COLORS = {
   optimista: 'var(--s-opt)',
@@ -18,7 +18,7 @@ const clampR = (value) => Math.min(3, Math.max(0.3, Number(value) || 0.3));
 
 export default function Proyecciones({ token, anio, terr, terrName, sim, setSim }) {
   const [data, setData] = useState(null);
-  const [horizonte, setHorizonte] = useState(60);
+  const [horizonte, setHorizonte] = useState(365);
   const [state, setState] = useState({ loading: true, error: '' });
 
   useEffect(() => {
@@ -264,7 +264,7 @@ export default function Proyecciones({ token, anio, terr, terrName, sim, setSim 
             >
               {HORIZONTES.map((value) => (
                 <option key={value} value={value}>
-                  {value} días
+                  {value === 365 ? 'Año (365 días)' : `${value} días`}
                 </option>
               ))}
             </select>
@@ -349,6 +349,12 @@ export default function Proyecciones({ token, anio, terr, terrName, sim, setSim 
               </div>
             </div>
             <p className="hint">{quality.mensaje}</p>
+            {horizonte >= 180 && (
+              <p className="hint">
+                Horizonte largo: la incertidumbre crece y el resultado debe leerse como
+                escenario, no como pronóstico puntual.
+              </p>
+            )}
             {noRecentCases && base.activos_al_corte === 0 && (
               <p className="note">
                 No hay casos en la ventana de proyección; las curvas permanecerán en cero.
@@ -464,6 +470,16 @@ export default function Proyecciones({ token, anio, terr, terrName, sim, setSim 
                 <span>sMAPE {backtest.smape == null ? '—' : pct(backtest.smape)}</span>
                 <span>{backtest.dias_comparados} días</span>
               </div>
+              <div className="projmeta num">
+                <span>Proyectado {fmt(backtest.proyectado_total)}</span>
+                <span>Observado {fmt(backtest.observado_total)}</span>
+                <span>
+                  Desviación{' '}
+                  {backtest.desviacion_total == null
+                    ? '—'
+                    : pct(backtest.desviacion_total)}
+                </span>
+              </div>
               {backtest.smape != null && backtest.smape > 80 && (
                 <p className="hint">
                   El modelo tiene dificultad para capturar cambios abruptos de tendencia.
@@ -490,6 +506,8 @@ export default function Proyecciones({ token, anio, terr, terrName, sim, setSim 
                 <th>Nuevos 30 d</th>
                 <th>Nuevos 60 d</th>
                 <th>Nuevos 90 d</th>
+                <th>Nuevos 180 d</th>
+                <th>Nuevos 365 d</th>
                 <th>Pico activos</th>
                 <th>Fecha pico</th>
               </tr>
@@ -502,6 +520,8 @@ export default function Proyecciones({ token, anio, terr, terrName, sim, setSim 
                   <td>{fmt(scenario.resumen.nuevos_30d)}</td>
                   <td>{fmt(scenario.resumen.nuevos_60d)}</td>
                   <td>{fmt(scenario.resumen.nuevos_90d)}</td>
+                  <td>{fmt(scenario.resumen.nuevos_180d)}</td>
+                  <td>{fmt(scenario.resumen.nuevos_365d)}</td>
                   <td>{fmt(scenario.resumen.pico_activos)}</td>
                   <td>{dShort(parseDate(scenario.resumen.fecha_pico))}</td>
                 </tr>

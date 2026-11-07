@@ -136,6 +136,22 @@ def test_proyeccion_servicio_cambia_horizonte() -> None:
     assert all("nuevos_90d" in item["resumen"] for item in payload["escenarios"])
 
 
+def test_proyeccion_servicio_horizonte_anual() -> None:
+    payload = _service().get(
+        periodo="2021",
+        horizonte=365,
+        medidas=40,
+    )
+
+    assert len(payload["fechas_proyeccion"]) == 365
+    assert all(len(item["nuevos"]) == 365 for item in payload["escenarios"])
+    assert all("nuevos_180d" in item["resumen"] for item in payload["escenarios"])
+    assert all("nuevos_365d" in item["resumen"] for item in payload["escenarios"])
+    assert payload["backtest"] is not None
+    assert payload["backtest"]["observado_total"] >= 0
+    assert payload["backtest"]["proyectado_total"] >= 0
+
+
 def test_proyeccion_servicio_valida_parametros() -> None:
     with pytest.raises(ProyeccionValidationError):
         _service().get(periodo="2021", horizonte=45)

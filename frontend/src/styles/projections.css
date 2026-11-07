@@ -78,7 +78,7 @@ input[type='range'] {
   gap: 8px;
 }
 .horizon select {
-  min-width: 92px;
+  min-width: 132px;
   padding: 5px 8px;
 }
 .projbase {

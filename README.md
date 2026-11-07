@@ -16,7 +16,7 @@ desde agregados precalculados en MongoDB.
 - ✅ Persistencia MongoDB de casos, KPIs y agregados del tablero.
 - ✅ Tablero por año: KPIs históricos, tendencia, territorio, sexo, edad y calor.
 - ✅ Proyecciones por año y territorio con backtesting y bandas de incertidumbre.
-- ✅ 59 pruebas automatizadas.
+- ✅ 60 pruebas automatizadas.
 
 ## Estructura
 
@@ -211,7 +211,7 @@ uvicorn app.main:app --reload
 | `POST` | `/api/v1/auth/users` | Crear usuario (restringido a rol `admin`). |
 | `GET` | `/api/v1/kpis/gerenciales?anio=acumulado` | KPIs nacionales preagregados; acepta `acumulado` o `2020`–`2024`; requiere JWT. |
 | `GET` | `/api/v1/dashboard?anio=2021&departamento=05` | Tablero completo preagregado: KPIs, series, territorio, demografía y calor; requiere JWT. |
-| `GET` | `/api/v1/proyecciones?anio=2021&departamento=05&horizonte=60` | Proyección de casos nuevos y activos con escenarios, bandas y backtesting; requiere JWT. |
+| `GET` | `/api/v1/proyecciones?anio=2021&departamento=05&horizonte=365` | Proyección de casos nuevos y activos con escenarios, bandas y backtesting; horizonte 30/60/90/180/365; requiere JWT. |
 
 Ejemplo:
 
