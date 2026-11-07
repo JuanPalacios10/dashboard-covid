@@ -9,7 +9,7 @@ import { sum } from '../utils/format.js';
      GET  /api/series?territorio=        -> casos diarios
      GET  /api/territorios/incidencia    -> casos por departamento y semana
      GET  /api/demografia?territorio=    -> sexo y grupos etarios
-     POST /api/proyecciones              -> { R, medidas, territorio } -> 3 escenarios + simulación
+     GET  /api/proyecciones?anio=&departamento=&horizonte= -> escenarios + bandas
      POST /api/informes/pdf              -> genera PDF con membrete, fecha y firma digital
      WS   /ws/kpis                       -> métricas en tiempo real (latencia < 500 ms)
    ====================================================================== */

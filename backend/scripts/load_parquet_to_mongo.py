@@ -177,7 +177,7 @@ def main() -> int:
             f"recuperados={summary['recuperados']:,} | "
             f"activos={summary['activos']:,} | "
             f"fecha_corte={summary['fecha_corte']} | "
-            f"documentos={summary['series'] + summary['territorios'] + summary['demografia'] + summary['heatmap']}"
+            f"documentos={summary['series'] + summary['territorios'] + summary['demografia'] + summary['heatmap'] + summary['proyecciones']}"
         )
         return 0
     except Exception as exc:  # noqa: BLE001 - reportar cualquier fallo de carga

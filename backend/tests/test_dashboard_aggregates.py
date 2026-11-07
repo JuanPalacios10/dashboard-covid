@@ -126,6 +126,12 @@ def test_consolidacion_usa_fechas_terminales_y_cohorte_anual(
     assert dashboard["demografia:2021"]["total"] == 4
     assert dashboard["heatmap:2021"]["columnas"][0] == "Ene"
 
+    projection = dashboard["proyeccion:nacional:2021"]
+    assert projection["base"]["activos_al_corte"] == 2
+    assert projection["base"]["r_estimado"] >= 0
+    assert projection["calidad"]["dias_base"] == 56
+    assert dashboard["proyeccion:departamento:05:2021"]["base"]["activos_al_corte"] == 1
+
 
 def test_consolidacion_completa_series_cero_para_departamentos_sin_casos(
     tmp_path: Path, monkeypatch
@@ -163,3 +169,9 @@ def test_consolidacion_completa_series_cero_para_departamentos_sin_casos(
     assert zero_series["departamento"]["nombre"] == "ANTIOQUIA"
     assert zero_series["series"][0]["nombre"] == "Sin casos"
     assert zero_series["series"][0]["total"] == 0
+
+    projection = dashboard["proyeccion:nacional:2021"]
+    posterior = projection["observado_posterior"]
+    assert posterior is not None
+    assert posterior["fechas"][0] == "2022-01-01"
+    assert sum(posterior["casos_diarios"]) == 1

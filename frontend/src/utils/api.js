@@ -75,3 +75,23 @@ export const dashboardApi = {
     return data;
   },
 };
+
+export const proyeccionApi = {
+  obtener: async (
+    token,
+    { anio = 'acumulado', departamento, horizonte = 60, r, medidas = 40, signal } = {},
+  ) => {
+    const { data } = await api.get('/proyecciones', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: {
+        anio,
+        horizonte,
+        medidas,
+        ...(departamento ? { departamento } : {}),
+        ...(r != null ? { r } : {}),
+      },
+      signal,
+    });
+    return data;
+  },
+};

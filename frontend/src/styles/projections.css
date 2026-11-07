@@ -71,3 +71,66 @@ input[type='range'] {
   border-radius: 999px;
   border: 1px solid currentColor;
 }
+
+.horizon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.horizon select {
+  min-width: 92px;
+  padding: 5px 8px;
+}
+.projbase {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 12px 0 6px;
+}
+.projbase div {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.projbase span {
+  display: block;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.projbase b {
+  display: block;
+  margin-top: 2px;
+  font: 800 15px var(--display);
+  color: var(--ink);
+}
+.qbadge {
+  display: inline-block;
+  width: fit-content;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: capitalize;
+}
+.qbadge.alta {
+  background: color-mix(in srgb, var(--good) 16%, transparent);
+  color: var(--good);
+}
+.qbadge.media {
+  background: color-mix(in srgb, var(--s-pes) 16%, transparent);
+  color: var(--s-pes);
+}
+.qbadge.baja {
+  background: color-mix(in srgb, var(--bad) 14%, transparent);
+  color: var(--bad);
+}
+.projmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--ink2);
+}

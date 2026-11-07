@@ -22,6 +22,8 @@ dataset (2024-01-17).
 
 from __future__ import annotations
 
+import math
+from bisect import bisect_right
 from collections import Counter, defaultdict
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, time
@@ -34,6 +36,12 @@ from pymongo import ReplaceOne
 from pymongo.collection import Collection
 
 TOP_MUNICIPIOS = 5
+
+BASE_WINDOW_DAYS = 56
+POSTERIOR_DAYS = 60
+GENERATION_DAYS = 5.0
+QUALITY_ALTA_DAYS = 56
+QUALITY_MEDIA_DAYS = 28
 
 AGE_LABELS: tuple[str, ...] = (
     "0-9",
@@ -147,6 +155,125 @@ def _int(value: Any) -> int:
 
 def _series_values(series: pd.Series, dates: pd.DatetimeIndex) -> list[int]:
     return [_int(value) for value in series.reindex(dates, fill_value=0).tolist()]
+
+
+def _estimate_r(values: list[int]) -> float:
+    """Estima R con el crecimiento del promedio móvil de 7 días."""
+
+    if not values or sum(values) <= 0:
+        return 0.0
+    last_window = values[-7:]
+    previous_window = values[-14:-7] if len(values) >= 14 else last_window
+    last_average = sum(last_window) / len(last_window)
+    previous_average = sum(previous_window) / len(previous_window)
+    growth = math.log((last_average + 1.0) / (previous_average + 1.0)) / 7.0
+    return round(max(0.0, min(3.0, math.exp(growth * GENERATION_DAYS))), 4)
+
+
+def _max_7d_average(values: list[int]) -> float:
+    if not values:
+        return 0.0
+    windows = [
+        sum(values[index - 6 : index + 1]) / 7.0
+        for index in range(6, len(values))
+    ]
+    return round(max(windows) if windows else sum(values) / len(values), 2)
+
+
+def _quality(
+    base_dates: pd.DatetimeIndex,
+    base_values: list[int],
+) -> dict[str, Any]:
+    days = len(base_dates)
+    days_with_data = sum(1 for value in base_values if value > 0)
+    if sum(base_values) <= 0:
+        level = "baja"
+        message = "Sin casos en la ventana de proyección."
+    elif days >= QUALITY_ALTA_DAYS:
+        level = "alta"
+        message = f"Base de {days} días."
+    elif days >= QUALITY_MEDIA_DAYS:
+        level = "media"
+        message = f"Base parcial de {days} días."
+    else:
+        level = "baja"
+        message = f"Solo {days} días de base; proyección indicativa."
+    return {
+        "nivel": level,
+        "dias_base": days,
+        "dias_con_datos": days_with_data,
+        "mensaje": message,
+    }
+
+
+def _cumulative_series(
+    counter: Counter[Any],
+    key: str | None = None,
+) -> tuple[list[pd.Timestamp], list[int]]:
+    if key is None:
+        items = sorted(counter.items(), key=lambda item: item[0])
+    else:
+        items = sorted(
+            (
+                (item[0][1], item[1])
+                for item in counter.items()
+                if item[0][0] == key
+            ),
+            key=lambda item: item[0],
+        )
+    dates: list[pd.Timestamp] = []
+    cumulative: list[int] = []
+    total = 0
+    for value_date, count in items:
+        total += _int(count)
+        dates.append(pd.Timestamp(value_date))
+        cumulative.append(total)
+    return dates, cumulative
+
+
+def _cumulative_at(
+    dates: list[pd.Timestamp],
+    cumulative: list[int],
+    target: pd.Timestamp,
+) -> int:
+    index = bisect_right(dates, target) - 1
+    return cumulative[index] if index >= 0 else 0
+
+
+def _period_specs(
+    year_payloads: list[dict[str, Any]],
+    max_report_date: pd.Timestamp,
+    daily_national: Counter[pd.Timestamp],
+) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    for payload in sorted(year_payloads, key=lambda item: item["year"]):
+        year = int(payload["year"])
+        year_dates = [value for value in daily_national if value.year == year]
+        first_date = (
+            min(year_dates) if year_dates else pd.Timestamp(date(year, 1, 1))
+        )
+        specs.append(
+            {
+                "key": str(year),
+                "anio": year,
+                "periodo": "anual",
+                "cutoff": payload["cutoff"],
+                "period_start": max(pd.Timestamp(date(year, 1, 1)), first_date),
+            }
+        )
+    first_date = (
+        min(daily_national) if daily_national else max_report_date
+    )
+    specs.append(
+        {
+            "key": "acumulado",
+            "anio": None,
+            "periodo": "acumulado",
+            "cutoff": max_report_date,
+            "period_start": pd.Timestamp(first_date),
+        }
+    )
+    return specs
 
 
 def _kpi_document(
@@ -422,6 +549,10 @@ def consolidate_dashboard_from_parquet(
     monthly_national: Counter[str] = Counter()
     monthly_dept: Counter[tuple[str, str]] = Counter()
     monthly_mun: Counter[tuple[str, str, str]] = Counter()
+    daily_national: Counter[pd.Timestamp] = Counter()
+    daily_dept: Counter[tuple[str, pd.Timestamp]] = Counter()
+    end_active_national: Counter[pd.Timestamp] = Counter()
+    end_active_dept: Counter[tuple[str, pd.Timestamp]] = Counter()
     sexo_counts_all: Counter[str] = Counter()
     sexo_deaths_all: Counter[str] = Counter()
     edad_counts_all: Counter[str] = Counter()
@@ -507,6 +638,9 @@ def consolidate_dashboard_from_parquet(
 
         dates = pd.date_range(frame["fecha"].min(), frame_max_date, freq="D")
         national_daily = frame.groupby("fecha").size()
+        daily_national.update(
+            {pd.Timestamp(key): _int(value) for key, value in national_daily.to_dict().items()}
+        )
         dashboard_documents.append(
             _series_document(
                 doc_id=f"series:nacional:{year}",
@@ -535,6 +669,33 @@ def consolidate_dashboard_from_parquet(
         ).size()
         dept_totals = frame.groupby("codigo_departamento").size()
         dept_deaths = frame[death].groupby("codigo_departamento").size()
+
+        daily_dept.update(
+            {
+                (str(key[0]), pd.Timestamp(key[1])): _int(value)
+                for key, value in dept_daily.to_dict().items()
+            }
+        )
+        end_active = frame[["fecha_muerte", "fecha_recuperacion"]].min(axis=1)
+        has_end = end_active.notna()
+        end_active = end_active[has_end].dt.normalize()
+        end_active = end_active.where(
+            end_active >= frame.loc[has_end, "fecha"],
+            frame.loc[has_end, "fecha"],
+        )
+        end_active_national.update(end_active.value_counts().to_dict())
+        end_active_frame = frame.loc[
+            end_active.index, ["codigo_departamento"]
+        ].copy()
+        end_active_frame["end_active"] = end_active
+        end_active_dept.update(
+            {
+                (str(key[0]), pd.Timestamp(key[1])): _int(value)
+                for key, value in end_active_frame.groupby(
+                    ["codigo_departamento", "end_active"]
+                ).size().to_dict().items()
+            }
+        )
 
         dashboard_documents.extend(
             _build_year_series(
@@ -965,6 +1126,181 @@ def consolidate_dashboard_from_parquet(
         )
     )
 
+    # Bases precalculadas para la pestaña de proyecciones. La API solo
+    # ejecutará el modelo sobre estas series; no consultará casos_covid.
+    national_report_dates, national_report_cum = _cumulative_series(
+        daily_national
+    )
+    national_end_dates, national_end_cum = _cumulative_series(
+        end_active_national
+    )
+    dept_report_cum = {
+        code: _cumulative_series(daily_dept, code)
+        for code in all_dept_names
+    }
+    dept_end_cum = {
+        code: _cumulative_series(end_active_dept, code)
+        for code in all_dept_names
+    }
+
+    territories: list[dict[str, Any]] = [
+        {
+            "code": None,
+            "name": "Nacional",
+            "tipo": "nacional",
+            "report_dates": national_report_dates,
+            "report_cum": national_report_cum,
+            "end_dates": national_end_dates,
+            "end_cum": national_end_cum,
+        }
+    ]
+    for code, name in sorted(all_dept_names.items()):
+        report_dates, report_cum = dept_report_cum[code]
+        end_dates, end_cum = dept_end_cum[code]
+        territories.append(
+            {
+                "code": code,
+                "name": name,
+                "tipo": "departamento",
+                "report_dates": report_dates,
+                "report_cum": report_cum,
+                "end_dates": end_dates,
+                "end_cum": end_cum,
+            }
+        )
+
+    for spec in _period_specs(year_payloads, max_report_date, daily_national):
+        cutoff = pd.Timestamp(spec["cutoff"])
+        base_start = max(
+            pd.Timestamp(spec["period_start"]),
+            cutoff - pd.Timedelta(days=BASE_WINDOW_DAYS - 1),
+        )
+        base_dates = pd.date_range(base_start, cutoff, freq="D")
+        posterior_dates: list[pd.Timestamp] = []
+        if spec["anio"] is not None and spec["anio"] < 2024:
+            posterior_start = cutoff + pd.Timedelta(days=1)
+            posterior_end = min(
+                cutoff + pd.Timedelta(days=POSTERIOR_DAYS),
+                max_report_date,
+            )
+            if posterior_start <= posterior_end:
+                posterior_dates = list(
+                    pd.date_range(posterior_start, posterior_end, freq="D")
+                )
+
+        for territory in territories:
+            code = territory["code"]
+            if code is None:
+                base_values = [
+                    _int(daily_national.get(day, 0)) for day in base_dates
+                ]
+                posterior_values = [
+                    _int(daily_national.get(day, 0))
+                    for day in posterior_dates
+                ]
+            else:
+                base_values = [
+                    _int(daily_dept.get((code, day), 0))
+                    for day in base_dates
+                ]
+                posterior_values = [
+                    _int(daily_dept.get((code, day), 0))
+                    for day in posterior_dates
+                ]
+
+            period_dates = pd.date_range(
+                pd.Timestamp(spec["period_start"]),
+                cutoff,
+                freq="D",
+            )
+            if code is None:
+                period_values = [
+                    _int(daily_national.get(day, 0)) for day in period_dates
+                ]
+            else:
+                period_values = [
+                    _int(daily_dept.get((code, day), 0))
+                    for day in period_dates
+                ]
+            max_7d_period = _max_7d_average(period_values)
+
+            active_series = [
+                _cumulative_at(
+                    territory["report_dates"],
+                    territory["report_cum"],
+                    day,
+                )
+                - _cumulative_at(
+                    territory["end_dates"],
+                    territory["end_cum"],
+                    day,
+                )
+                for day in base_dates
+            ]
+            active_at_cutoff = _cumulative_at(
+                territory["report_dates"],
+                territory["report_cum"],
+                cutoff,
+            ) - _cumulative_at(
+                territory["end_dates"],
+                territory["end_cum"],
+                cutoff,
+            )
+            last_window = base_values[-7:]
+            promedio_7d_actual = (
+                sum(last_window) / len(last_window) if last_window else 0.0
+            )
+            r_estimado = _estimate_r(base_values)
+            calidad = _quality(base_dates, base_values)
+
+            if code is None:
+                doc_id = f"proyeccion:nacional:{spec['key']}"
+                departamento = None
+            else:
+                doc_id = f"proyeccion:departamento:{code}:{spec['key']}"
+                departamento = {
+                    "codigo": code,
+                    "nombre": territory["name"],
+                }
+
+            dashboard_documents.append(
+                {
+                    "_id": doc_id,
+                    "tipo": territory["tipo"],
+                    "periodo": spec["periodo"],
+                    "anio": spec["anio"],
+                    "fecha_corte": _as_datetime(cutoff),
+                    "departamento": departamento,
+                    "calidad": calidad,
+                    "base": {
+                        "fechas": [
+                            value.strftime("%Y-%m-%d")
+                            for value in base_dates
+                        ],
+                        "casos_diarios": base_values,
+                        "activos_diarios": [
+                            max(0, _int(value)) for value in active_series
+                        ],
+                        "activos_al_corte": max(0, _int(active_at_cutoff)),
+                        "promedio_7d_actual": round(promedio_7d_actual, 2),
+                        "max_7d_periodo": max_7d_period,
+                        "r_estimado": r_estimado,
+                    },
+                    "observado_posterior": (
+                        {
+                            "fechas": [
+                                value.strftime("%Y-%m-%d")
+                                for value in posterior_dates
+                            ],
+                            "casos_diarios": posterior_values,
+                        }
+                        if posterior_dates
+                        else None
+                    ),
+                    "actualizado_en": actualizado_en,
+                }
+            )
+
     _replace_documents(kpis_collection, kpi_documents)
     _replace_documents(dashboard_collection, dashboard_documents)
 
@@ -991,6 +1327,11 @@ def consolidate_dashboard_from_parquet(
             1
             for document in dashboard_documents
             if document["_id"].startswith("heatmap:")
+        ),
+        "proyecciones": sum(
+            1
+            for document in dashboard_documents
+            if document["_id"].startswith("proyeccion:")
         ),
         "confirmados": cumulative_confirmed,
         "fallecidos": cumulative_deaths,

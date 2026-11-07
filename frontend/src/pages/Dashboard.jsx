@@ -183,7 +183,14 @@ export default function Dashboard({ onExit, toast }) {
           />
         )}
         {tab === 'proyecciones' && (
-          <Proyecciones view={view} sim={sim} setSim={setSim} />
+          <Proyecciones
+            token={token}
+            anio={anio}
+            terr={terr}
+            terrName={terrName}
+            sim={sim}
+            setSim={setSim}
+          />
         )}
         {tab === 'informes' && (
           <Informes view={view} terrName={terrName} sim={sim} toast={toast} />
@@ -191,8 +198,8 @@ export default function Dashboard({ onExit, toast }) {
       </div>
       <footer className="foot">
         <span>
-          KPIs, tendencia, territorio, sexo, edad y mapa de calor desde MongoDB.
-          Proyecciones e informes siguen siendo demostrativos.
+          KPIs, tendencia, territorio, sexo, edad, mapa de calor y proyecciones desde MongoDB.
+          Informes sigue siendo demostrativo.
         </span>
         <span>Este rol no accede a microdatos individuales ni a administración e ingesta.</span>
       </footer>

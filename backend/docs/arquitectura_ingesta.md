@@ -102,6 +102,30 @@ La consulta de la API nunca agrega `casos_covid` en tiempo de request: cada
 endpoint lee uno o pocos documentos por `_id` en `kpis_gerenciales` o
 `dashboard_agregados`.
 
+### Proyecciones
+
+La pestaña de proyecciones usa documentos
+`proyeccion:nacional:{periodo}` y
+`proyeccion:departamento:{codigo}:{periodo}` dentro de
+`dashboard_agregados`. Cada documento guarda:
+
+- los últimos 56 días de la serie diaria;
+- los activos totales al corte, calculados con fechas reales;
+- el R estimado del período;
+- la calidad de la base (alta, media o baja);
+- la serie observada posterior al corte, cuando existe.
+
+El endpoint `GET /api/v1/proyecciones` ejecuta un modelo de crecimiento
+amortiguado con capacidad de saturación derivada del máximo histórico de la
+serie. Devuelve escenarios optimista, moderado, pesimista y personalizado,
+bandas aproximadas al 80 %, y backtesting para 2020–2023. No usa población ni
+capacidad UCI inventada; la saturación de camas UCI se retiró porque el
+dataset no contiene esa información.
+
+En 2024 solo hay 15 días de base, por lo que la calidad se marca como baja y
+la proyección debe interpretarse como indicativa. En 2023 el backtesting es
+parcial porque los datos posteriores llegan hasta 2024-01-17.
+
 Para cargar la capa Parquet existente sin reejecutar la ingesta:
 
 ```bash
@@ -127,6 +151,9 @@ python scripts/load_parquet_to_mongo.py --skip-load
 - `GET /api/v1/dashboard?anio=2021&departamento=05` devuelve el tablero
   compuesto (KPIs, series, territorios, demografía y calor) desde
   `dashboard_agregados`. Requiere el mismo control de roles.
+- `GET /api/v1/proyecciones?anio=2021&departamento=05&horizonte=60` devuelve
+  la base histórica, los escenarios, las bandas y el backtesting. También
+  requiere JWT con rol `admin`, `analista` o `ejecutivo`.
 
 El estado del job vive en memoria del proceso; el resultado durable es el
 manifiesto JSON. Para despliegues con varios workers se recomienda mover el
@@ -136,4 +163,4 @@ estado a Redis/DB o ejecutar la ingesta como tarea de un worker dedicado.
 
 1. Programación de ingestas (cron/worker) y monitoreo.
 2. Filtros municipales detallados y comparación entre municipios.
-3. Proyecciones, informes PDF y microdatos con endpoints propios.
+3. Informes PDF y microdatos con endpoints propios.

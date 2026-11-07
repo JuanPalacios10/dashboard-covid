@@ -15,7 +15,8 @@ desde agregados precalculados en MongoDB.
 - ✅ API FastAPI para lanzar y consultar la ingesta.
 - ✅ Persistencia MongoDB de casos, KPIs y agregados del tablero.
 - ✅ Tablero por año: KPIs históricos, tendencia, territorio, sexo, edad y calor.
-- ✅ 49 pruebas automatizadas.
+- ✅ Proyecciones por año y territorio con backtesting y bandas de incertidumbre.
+- ✅ 59 pruebas automatizadas.
 
 ## Estructura
 
@@ -26,6 +27,7 @@ dashboard-covid/
 │   │   ├── api/routes.py          # Endpoints de ingesta
 │   │   ├── api/kpis.py            # KPIs gerenciales
 │   │   ├── api/dashboard.py       # Tablero compuesto preagregado
+│   │   ├── api/projections.py     # Proyecciones por año y territorio
 │   │   ├── ingestion/
 │   │   │   ├── schema.py          # Columnas, tipos y catálogo DANE
 │   │   │   ├── cleaner.py         # Normalización y validación por chunk
@@ -39,6 +41,7 @@ dashboard-covid/
 │   │   ├── services/jobs.py       # Job en segundo plano de la API
 │   │   ├── services/kpis.py       # Consulta de KPIs preagregados
 │   │   ├── services/dashboard.py  # Consulta de agregados del tablero
+│   │   ├── services/projections.py # Modelo y consulta de proyecciones
 │   │   ├── config.py              # Configuración por variables de entorno
 │   │   ├── database.py            # Conexión y repositorios MongoDB
 │   │   └── main.py                # Aplicación FastAPI
@@ -208,6 +211,7 @@ uvicorn app.main:app --reload
 | `POST` | `/api/v1/auth/users` | Crear usuario (restringido a rol `admin`). |
 | `GET` | `/api/v1/kpis/gerenciales?anio=acumulado` | KPIs nacionales preagregados; acepta `acumulado` o `2020`–`2024`; requiere JWT. |
 | `GET` | `/api/v1/dashboard?anio=2021&departamento=05` | Tablero completo preagregado: KPIs, series, territorio, demografía y calor; requiere JWT. |
+| `GET` | `/api/v1/proyecciones?anio=2021&departamento=05&horizonte=60` | Proyección de casos nuevos y activos con escenarios, bandas y backtesting; requiere JWT. |
 
 Ejemplo:
 
@@ -236,6 +240,7 @@ Con el backend en ejecución, se puede medir el percentil 95 de los endpoints:
 ```bash
 python scripts/benchmark_kpis.py --requests 100
 python scripts/benchmark_dashboard.py --requests 100
+python scripts/benchmark_proyecciones.py --requests 100
 ```
 
 La documentación interactiva está en `http://127.0.0.1:8000/docs`.
@@ -267,8 +272,8 @@ Rutas del frontend: `/` (landing), `/login`, `/register` y `/dashboard`
 
 El tablero consume `/api/v1/dashboard`. Los KPIs, la tendencia, la
 distribución territorial, el sexo, la edad y el mapa de calor usan datos
-reales de MongoDB; las pestañas de proyecciones e informes siguen siendo
-demostrativas.
+reales de MongoDB. La pestaña de proyecciones consume
+`/api/v1/proyecciones` y la de informes sigue siendo demostrativa.
 
 ## Criterios de aceptación
 
@@ -302,5 +307,5 @@ definiciones históricas de fallecidos, recuperados y activos.
 
 1. Programar ingestas automáticas y monitoreo.
 2. Agregar filtros municipales detallados y comparación entre municipios.
-3. Incorporar proyecciones, informes PDF y microdatos con sus propios
-   endpoints y controles de acceso.
+3. Incorporar informes PDF y microdatos con sus propios endpoints y
+   controles de acceso.
