@@ -3,7 +3,7 @@ import Card from '../components/ui/Card.jsx';
 import { useAuth } from '../context/auth.js';
 import { informesApi } from '../utils/api.js';
 
-export default function Informes({ anio, departamento, terrName, toast }) {
+export default function Informes({ anio, departamento, terrName, sim, toast }) {
   const { token } = useAuth();
   const [dest, setDest] = useState('Consejo de gobierno');
   const [incl, setIncl] = useState(true);
@@ -23,6 +23,8 @@ export default function Informes({ anio, departamento, terrName, toast }) {
         anio: anio ?? 'acumulado',
         departamento: departamento ?? null,
         incluir_proyeccion: incl,
+        r: sim.R,
+        medidas: sim.m,
       });
 
       const url = URL.createObjectURL(blob);
@@ -60,7 +62,7 @@ export default function Informes({ anio, departamento, terrName, toast }) {
         </div>
         <label className="chk" htmlFor="incl">
           <input id="incl" type="checkbox" checked={incl} onChange={(e) => setIncl(e.target.checked)} />
-          Incluir proyección a 30 días
+          Incluir proyección
         </label>
         <button className="btn" onClick={handleExportPdf} disabled={downloading}>
           {downloading ? 'Generando PDF…' : 'Exportar PDF'}
