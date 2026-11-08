@@ -62,7 +62,6 @@ export default function Dashboard({ onExit, toast }) {
     setLoadState({ loading: true, error: '' });
   };
 
-  // Proyecciones e informes siguen usando el modelo demostrativo.
   const view = useMemo(() => getView('all'), []);
   const fechaCorte = data?.fecha_corte
     ? dLong(new Date(`${data.fecha_corte}T00:00:00`))
@@ -193,14 +192,16 @@ export default function Dashboard({ onExit, toast }) {
           />
         )}
         {tab === 'informes' && (
-          <Informes view={view} terrName={terrName} sim={sim} toast={toast} />
+          <Informes
+            anio={anio}
+            departamento={terr === 'all' ? null : terr}
+            terrName={terrName}
+            sim={sim}
+            toast={toast}
+          />
         )}
       </div>
       <footer className="foot">
-        <span>
-          KPIs, tendencia, territorio, sexo, edad, mapa de calor y proyecciones desde MongoDB.
-          Informes sigue siendo demostrativo.
-        </span>
         <span>Este rol no accede a microdatos individuales ni a administración e ingesta.</span>
       </footer>
     </div>
