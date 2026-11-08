@@ -7,10 +7,21 @@ from io import BytesIO
 from typing import Any
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    BaseDocTemplate,
+    Frame,
+    KeepTogether,
+    NextPageTemplate,
+    PageBreak,
+    PageTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+)
 from reportlab.graphics.shapes import Drawing, Line, String
 
 
@@ -69,36 +80,134 @@ def _build_kpi_rows(dashboard: dict[str, Any]) -> list[list[str]]:
     ]
 
 
-def _build_trend_drawing() -> Drawing:
-    drawing = Drawing(width=520, height=160)
-    drawing.add(Line(30, 20, 500, 20, strokeColor=colors.grey, strokeWidth=1))
-    drawing.add(Line(30, 20, 30, 140, strokeColor=colors.grey, strokeWidth=1))
-
-    points = [
-        (40, 60),
-        (100, 70),
-        (170, 90),
-        (240, 80),
-        (310, 100),
-        (380, 85),
-        (450, 110),
+def _moving_average(values: list[Any], window: int = 7) -> list[float | None]:
+    return [
+        round(sum(_to_float(value) for value in values[index - window + 1 : index + 1]) / window, 2)
+        if index >= window - 1
+        else None
+        for index in range(len(values))
     ]
-    for index in range(len(points) - 1):
-        x1, y1 = points[index]
-        x2, y2 = points[index + 1]
-        drawing.add(Line(x1, y1, x2, y2, strokeColor=colors.HexColor('#3b82f6'), strokeWidth=2.5))
 
-    for x, y in points:
-        drawing.add(Line(x - 3, y, x + 3, y, strokeColor=colors.HexColor('#1d4ed8'), strokeWidth=1.5))
 
-    drawing.add(String(340, 145, 'Tendencia semanal', fontName='Helvetica-Bold', fontSize=9, fillColor=colors.HexColor('#1f2937')))
+def _build_trend_drawing(series_data: dict[str, Any] | None) -> Drawing:
+    drawing = Drawing(width=520, height=190)
+    dates = (series_data or {}).get('fechas', [])
+    source_series = (series_data or {}).get('series', [])
+    if not dates or not source_series:
+        drawing.add(String(40, 90, 'No hay datos de tendencia para los filtros seleccionados.', fontName='Helvetica', fontSize=9, fillColor=colors.HexColor('#4b5563')))
+        return drawing
+
+    palette = ['#2563eb', '#0f766e', '#dc2626', '#d97706', '#7c3aed', '#475569', '#059669']
+    daily = (series_data or {}).get('granularidad') == 'diaria'
+    nacional = (series_data or {}).get('tipo') == 'nacional'
+    chart_series: list[dict[str, Any]] = []
+    if daily and nacional:
+        values = source_series[0].get('valores', [])
+        chart_series = [
+            {'name': 'Casos diarios', 'values': values, 'color': '#2563eb', 'width': 1.2},
+            {'name': 'Promedio 7 días', 'values': _moving_average(values), 'color': '#0f766e', 'width': 2.2},
+        ]
+    else:
+        for index, item in enumerate(source_series):
+            values = item.get('valores', [])
+            chart_series.append({
+                'name': item.get('nombre', f'Serie {index + 1}'),
+                'values': _moving_average(values) if daily else values,
+                'color': palette[index % len(palette)],
+                'width': 2,
+            })
+
+    max_value = max(
+        (_to_float(value) for item in chart_series for value in item['values'] if value is not None),
+        default=0.0,
+    )
+    if max_value <= 0:
+        drawing.add(String(40, 90, 'Sin casos reportados para este período.', fontName='Helvetica', fontSize=9, fillColor=colors.HexColor('#4b5563')))
+        return drawing
+
+    left, right, bottom, top = 42, 368, 32, 158
+    drawing.add(Line(left, bottom, right, bottom, strokeColor=colors.HexColor('#9ca3af'), strokeWidth=0.8))
+    drawing.add(Line(left, bottom, left, top, strokeColor=colors.HexColor('#9ca3af'), strokeWidth=0.8))
+    for grid_index in range(1, 4):
+        y = bottom + (top - bottom) * grid_index / 4
+        drawing.add(Line(left, y, right, y, strokeColor=colors.HexColor('#e5e7eb'), strokeWidth=0.5))
+        drawing.add(String(2, y - 3, f'{max_value * grid_index / 4:,.0f}', fontName='Helvetica', fontSize=6, fillColor=colors.HexColor('#6b7280')))
+
+    point_count = len(dates)
+    for item in chart_series:
+        previous = None
+        values = item['values']
+        for index, value in enumerate(values[:point_count]):
+            if value is None:
+                previous = None
+                continue
+            x = left + (right - left) * index / max(point_count - 1, 1)
+            y = bottom + (top - bottom) * _to_float(value) / max_value
+            if previous is not None:
+                drawing.add(Line(previous[0], previous[1], x, y, strokeColor=colors.HexColor(item['color']), strokeWidth=item['width']))
+            previous = (x, y)
+
+    tick_count = min(7, point_count)
+    for tick in range(tick_count):
+        index = round(tick * (point_count - 1) / max(tick_count - 1, 1))
+        value = str(dates[index])
+        label = f'{value[8:10]}/{value[5:7]}' if daily and len(value) >= 10 else value[:7]
+        x = left + (right - left) * index / max(point_count - 1, 1)
+        drawing.add(String(x - 12, 17, label, fontName='Helvetica', fontSize=6, fillColor=colors.HexColor('#4b5563')))
+
+    for index, item in enumerate(chart_series):
+        y = top - index * 16
+        drawing.add(Line(390, y, 408, y, strokeColor=colors.HexColor(item['color']), strokeWidth=item['width']))
+        drawing.add(String(414, y - 3, item['name'][:22], fontName='Helvetica', fontSize=7, fillColor=colors.HexColor('#374151')))
     return drawing
+
+
+def _build_projection_table(projection_data: dict[str, Any]) -> Table:
+    headings = [
+        'Escenario', 'R efectivo', 'Nuevos 30 d', 'Nuevos 60 d', 'Nuevos 90 d',
+        'Nuevos 180 d', 'Nuevos 365 d', 'Pico activos', 'Fecha pico',
+    ]
+    rows = [headings]
+    for scenario in projection_data.get('escenarios', []):
+        summary = scenario.get('resumen', {})
+        rows.append([
+            scenario.get('nombre', scenario.get('id', '')),
+            f"{_to_float(scenario.get('r_efectivo')):.2f}",
+            _format_number(_to_int(summary.get('nuevos_30d'))),
+            _format_number(_to_int(summary.get('nuevos_60d'))),
+            _format_number(_to_int(summary.get('nuevos_90d'))),
+            _format_number(_to_int(summary.get('nuevos_180d'))),
+            _format_number(_to_int(summary.get('nuevos_365d'))),
+            _format_number(_to_int(summary.get('pico_activos'))),
+            str(summary.get('fecha_pico', '')),
+        ])
+    table = Table(
+        rows,
+        colWidths=[38 * mm, 20 * mm, 26 * mm, 26 * mm, 26 * mm, 26 * mm, 26 * mm, 26 * mm, 34 * mm],
+    )
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dbeafe')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 6.5),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+        ('ALIGN', (1, 1), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+    ]))
+    return table
 
 
 def build_informe_pdf_bytes(
     payload: dict[str, Any],
     dashboard: dict[str, Any] | None = None,
     report_date: datetime | None = None,
+    projection_data: dict[str, Any] | None = None,
 ) -> bytes:
     """Genera un PDF ejecutivo con membrete, KPIs y firma visual."""
     report_date = report_date or datetime.now(timezone.utc)
@@ -123,7 +232,7 @@ def build_informe_pdf_bytes(
         }
 
     buffer = BytesIO()
-    doc = SimpleDocTemplate(
+    doc = BaseDocTemplate(
         buffer,
         pagesize=A4,
         rightMargin=20 * mm,
@@ -131,6 +240,30 @@ def build_informe_pdf_bytes(
         topMargin=18 * mm,
         bottomMargin=18 * mm,
     )
+    portrait_width, portrait_height = A4
+    portrait_frame = Frame(
+        20 * mm,
+        18 * mm,
+        portrait_width - 40 * mm,
+        portrait_height - 36 * mm,
+        id='portrait-frame',
+    )
+    page_templates = [PageTemplate(id='portrait', frames=[portrait_frame], pagesize=A4)]
+    if include_projection:
+        landscape_width, landscape_height = landscape(A4)
+        landscape_frame = Frame(
+            20 * mm,
+            18 * mm,
+            landscape_width - 40 * mm,
+            landscape_height - 36 * mm,
+            id='landscape-frame',
+        )
+        page_templates.append(
+            PageTemplate(
+                id='landscape', frames=[landscape_frame], pagesize=landscape(A4)
+            )
+        )
+    doc.addPageTemplates(page_templates)
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -195,13 +328,20 @@ def build_informe_pdf_bytes(
     story.append(table)
     story.append(Spacer(1, 7 * mm))
 
-    story.append(Paragraph('Tendencia reciente', style=header_style))
-    story.append(_build_trend_drawing())
+    story.append(KeepTogether([
+        Paragraph('Tendencia de contagios', style=header_style),
+        _build_trend_drawing(dashboard.get('series')),
+    ]))
     story.append(Spacer(1, 6 * mm))
 
     if include_projection:
-        story.append(Paragraph('Proyección a 30 días', style=header_style))
-        story.append(Paragraph('Escenario institucional: proyección establecida para comité de decisión.', style=body_style))
+        story.append(NextPageTemplate('landscape'))
+        story.append(PageBreak())
+        story.append(Paragraph('Comparación de escenarios · Valores proyectados', style=header_style))
+        if projection_data and projection_data.get('escenarios'):
+            story.append(_build_projection_table(projection_data))
+        else:
+            story.append(Paragraph('No hay escenarios disponibles para los filtros seleccionados.', style=body_style))
         story.append(Spacer(1, 4 * mm))
 
     report_hash = build_informe_report_hash(payload, dashboard, report_date)

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from ..services.auth import UserRole
 from ..services.dashboard import DashboardService, get_dashboard_service
 from ..services.informes import build_informe_pdf_bytes
+from ..services.projections import ProyeccionService, get_proyeccion_service
 from .auth import require_roles
 
 router = APIRouter(prefix="/informes", tags=["informes"])
@@ -19,6 +20,8 @@ class InformePdfRequest(BaseModel):
     anio: str | int | None = None
     departamento: str | None = None
     incluir_proyeccion: bool = False
+    r: float = Field(default=1.3, ge=0.3, le=3.0)
+    medidas: float = Field(default=40, ge=0, le=100)
 
 
 @router.post(
@@ -37,13 +40,25 @@ def exportar_pdf(
         Depends(require_roles([UserRole.EJECUTIVO])),
     ],
     dashboard_service: Annotated[DashboardService, Depends(get_dashboard_service)],
+    proyeccion_service: Annotated[ProyeccionService, Depends(get_proyeccion_service)],
     payload: InformePdfRequest,
 ) -> Response:
     """Genera el PDF final a partir del estado actual del tablero."""
     try:
         anio = payload.anio if payload.anio not in (None, '') else 'acumulado'
         dashboard_data = dashboard_service.get(str(anio), payload.departamento)
-        pdf_bytes = build_informe_pdf_bytes(payload.model_dump(), dashboard_data)
+        projection_data = None
+        if payload.incluir_proyeccion:
+            projection_data = proyeccion_service.get(
+                periodo=str(anio),
+                departamento=payload.departamento,
+                horizonte=365,
+                r=payload.r,
+                medidas=payload.medidas,
+            )
+        pdf_bytes = build_informe_pdf_bytes(
+            payload.model_dump(), dashboard_data, projection_data=projection_data
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

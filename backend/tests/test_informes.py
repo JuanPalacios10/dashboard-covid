@@ -8,12 +8,16 @@ from app.api.auth import get_current_user
 from app.main import app
 from app.services.dashboard import get_dashboard_service
 from app.services.informes import build_informe_pdf_bytes, build_informe_report_hash
+from app.services.projections import get_proyeccion_service
 
 client = TestClient(app)
 
 
 class FakeDashboardService:
+    last_request = None
+
     def get(self, periodo: str | None = None, departamento: str | None = None):
+        FakeDashboardService.last_request = (periodo, departamento)
         return {
             'periodo': 'acumulado',
             'anio': None,
@@ -27,6 +31,37 @@ class FakeDashboardService:
                 'tasa_letalidad': 0.028,
                 'tasa_recuperacion': 0.97,
             },
+            'series': {
+                'tipo': 'nacional',
+                'granularidad': 'diaria',
+                'fechas': ['2024-01-15', '2024-01-16', '2024-01-17'],
+                'series': [{'nombre': 'Nacional', 'total': 6, 'valores': [1, 2, 3]}],
+            },
+        }
+
+
+class FakeProyeccionService:
+    last_request = None
+
+    def get(self, periodo, departamento, horizonte, r, medidas):
+        FakeProyeccionService.last_request = (periodo, departamento, horizonte, r, medidas)
+        return {
+            'escenarios': [
+                {
+                    'id': 'moderado',
+                    'nombre': 'Moderado',
+                    'r_efectivo': 0.91,
+                    'resumen': {
+                        'nuevos_30d': 100,
+                        'nuevos_60d': 200,
+                        'nuevos_90d': 300,
+                        'nuevos_180d': 600,
+                        'nuevos_365d': 1200,
+                        'pico_activos': 80,
+                        'fecha_pico': '2024-02-01',
+                    },
+                }
+            ]
         }
 
 
@@ -37,6 +72,7 @@ def _override_executive() -> None:
         'email': 'ejecutivo@covid.com',
     }
     app.dependency_overrides[get_dashboard_service] = lambda: FakeDashboardService()
+    app.dependency_overrides[get_proyeccion_service] = lambda: FakeProyeccionService()
 
 
 def test_exportar_pdf_requiere_rol_ejecutivo() -> None:
@@ -46,13 +82,18 @@ def test_exportar_pdf_requiere_rol_ejecutivo() -> None:
         json={
             'destino': 'Consejo de gobierno',
             'territorio': 'Nacional',
-            'anio': 'acumulado',
+            'anio': '2021',
+            'departamento': '05',
             'incluir_proyeccion': True,
+            'r': 1.5,
+            'medidas': 25,
         },
     )
     assert response.status_code == 200
     assert response.headers['content-type'].startswith('application/pdf')
     assert len(response.content) > 100
+    assert FakeDashboardService.last_request == ('2021', '05')
+    assert FakeProyeccionService.last_request == ('2021', '05', 365, 1.5, 25)
 
 
 def test_exportar_pdf_sin_permiso_devuelve_403() -> None:
