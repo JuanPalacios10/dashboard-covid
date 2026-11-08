@@ -235,3 +235,7 @@ backend/.env
 .agents/
 AGENTS.md
 GEMINI.md
+
+# Dependencias de Node (se regeneran con npm ci / npm install)
+node_modules/
+frontend/dist/
