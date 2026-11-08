@@ -7,14 +7,13 @@ from io import BytesIO
 from typing import Any
 
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
     KeepTogether,
-    NextPageTemplate,
     PageBreak,
     PageTemplate,
     Paragraph,
@@ -164,8 +163,8 @@ def _build_trend_drawing(series_data: dict[str, Any] | None) -> Drawing:
 
 def _build_projection_table(projection_data: dict[str, Any]) -> Table:
     headings = [
-        'Escenario', 'R efectivo', 'Nuevos 30 d', 'Nuevos 60 d', 'Nuevos 90 d',
-        'Nuevos 180 d', 'Nuevos 365 d', 'Pico activos', 'Fecha pico',
+        'Escenario', 'R efectivo', 'Nuevos 30 d', 'Nuevos 60 d',
+        'Nuevos 90 d', 'Pico activos 90 d', 'Fecha pico',
     ]
     rows = [headings]
     for scenario in projection_data.get('escenarios', []):
@@ -176,14 +175,12 @@ def _build_projection_table(projection_data: dict[str, Any]) -> Table:
             _format_number(_to_int(summary.get('nuevos_30d'))),
             _format_number(_to_int(summary.get('nuevos_60d'))),
             _format_number(_to_int(summary.get('nuevos_90d'))),
-            _format_number(_to_int(summary.get('nuevos_180d'))),
-            _format_number(_to_int(summary.get('nuevos_365d'))),
             _format_number(_to_int(summary.get('pico_activos'))),
             str(summary.get('fecha_pico', '')),
         ])
     table = Table(
         rows,
-        colWidths=[38 * mm, 20 * mm, 26 * mm, 26 * mm, 26 * mm, 26 * mm, 26 * mm, 26 * mm, 34 * mm],
+        colWidths=[29 * mm, 18 * mm, 22 * mm, 22 * mm, 22 * mm, 27 * mm, 25 * mm],
     )
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#dbeafe')),
@@ -240,30 +237,16 @@ def build_informe_pdf_bytes(
         topMargin=18 * mm,
         bottomMargin=18 * mm,
     )
-    portrait_width, portrait_height = A4
     portrait_frame = Frame(
         20 * mm,
         18 * mm,
-        portrait_width - 40 * mm,
-        portrait_height - 36 * mm,
+        A4[0] - 40 * mm,
+        A4[1] - 36 * mm,
         id='portrait-frame',
     )
-    page_templates = [PageTemplate(id='portrait', frames=[portrait_frame], pagesize=A4)]
-    if include_projection:
-        landscape_width, landscape_height = landscape(A4)
-        landscape_frame = Frame(
-            20 * mm,
-            18 * mm,
-            landscape_width - 40 * mm,
-            landscape_height - 36 * mm,
-            id='landscape-frame',
-        )
-        page_templates.append(
-            PageTemplate(
-                id='landscape', frames=[landscape_frame], pagesize=landscape(A4)
-            )
-        )
-    doc.addPageTemplates(page_templates)
+    doc.addPageTemplates(
+        [PageTemplate(id='portrait', frames=[portrait_frame], pagesize=A4)]
+    )
 
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -335,7 +318,6 @@ def build_informe_pdf_bytes(
     story.append(Spacer(1, 6 * mm))
 
     if include_projection:
-        story.append(NextPageTemplate('landscape'))
         story.append(PageBreak())
         story.append(Paragraph('Comparación de escenarios · Valores proyectados', style=header_style))
         if projection_data and projection_data.get('escenarios'):

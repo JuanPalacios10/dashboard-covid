@@ -52,7 +52,7 @@ def exportar_pdf(
             projection_data = proyeccion_service.get(
                 periodo=str(anio),
                 departamento=payload.departamento,
-                horizonte=365,
+                horizonte=90,
                 r=payload.r,
                 medidas=payload.medidas,
             )

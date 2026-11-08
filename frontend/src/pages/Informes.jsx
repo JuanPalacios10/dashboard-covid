@@ -3,7 +3,7 @@ import Card from '../components/ui/Card.jsx';
 import { useAuth } from '../context/auth.js';
 import { informesApi } from '../utils/api.js';
 
-export default function Informes({ anio, departamento, terrName, sim, toast }) {
+export default function Informes({ anio, departamento, terrName, sim }) {
   const { token } = useAuth();
   const [dest, setDest] = useState('Consejo de gobierno');
   const [incl, setIncl] = useState(true);
@@ -11,7 +11,7 @@ export default function Informes({ anio, departamento, terrName, sim, toast }) {
 
   const handleExportPdf = async () => {
     if (!token) {
-      toast('Debes iniciar sesión como ejecutivo para exportar el informe.');
+      alert('Debes iniciar sesión como ejecutivo para exportar el informe.');
       return;
     }
 
@@ -35,10 +35,10 @@ export default function Informes({ anio, departamento, terrName, sim, toast }) {
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
-      toast('Informe PDF descargado con éxito.');
+      
     } catch (error) {
       console.error(error);
-      toast('No se pudo generar el PDF. Verifica que el backend esté disponible y que tengas permisos.');
+      alert('No se pudo generar el PDF. Verifica que el backend esté disponible y que tengas permisos.');
     } finally {
       setDownloading(false);
     }

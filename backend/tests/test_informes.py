@@ -93,7 +93,8 @@ def test_exportar_pdf_requiere_rol_ejecutivo() -> None:
     assert response.headers['content-type'].startswith('application/pdf')
     assert len(response.content) > 100
     assert FakeDashboardService.last_request == ('2021', '05')
-    assert FakeProyeccionService.last_request == ('2021', '05', 365, 1.5, 25)
+    assert FakeProyeccionService.last_request == ('2021', '05', 90, 1.5, 25)
+    assert response.content.count(b'/MediaBox [ 0 0 595.2756 841.8898 ]') == 2
 
 
 def test_exportar_pdf_sin_permiso_devuelve_403() -> None:
