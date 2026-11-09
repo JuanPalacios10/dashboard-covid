@@ -1,4 +1,4 @@
-export default function Landing({ onLogin, onRegister }) {
+export default function Landing({ onLogin, onRegister: _onRegister }) {
   const cloud = (
     <svg viewBox="0 0 340 240" aria-hidden="true">
       <circle cx="40" cy="30" r="150" />
@@ -15,9 +15,12 @@ export default function Landing({ onLogin, onRegister }) {
           <h1>Dashboard</h1>
           <p className="sub">covid-19</p>
           <div className="cta">
+            {/* Registro oculto temporalmente: solo el administrador puede crear usuarios */}
+            {/*
             <button className="pill" onClick={onRegister}>
               Registrarse
             </button>
+            */}
             <button className="pill" onClick={onLogin}>
               Iniciar sesión
             </button>
