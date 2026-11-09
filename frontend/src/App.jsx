@@ -4,7 +4,8 @@ import { useAuth } from './context/auth.js';
 import Dashboard from './pages/Dashboard.jsx';
 import Landing from './pages/Landing.jsx';
 import Login from './pages/Login.jsx';
-import Register from './pages/Register.jsx';
+// Registro deshabilitado temporalmente en la interfaz (solo admin crea usuarios):
+// import Register from './pages/Register.jsx';
 
 function LoadingScreen() {
   return <div className="auth-loading">Verificando sesión…</div>;
@@ -15,7 +16,7 @@ function LandingRoute() {
   return (
     <Landing
       onLogin={() => navigate('/login')}
-      onRegister={() => navigate('/register')}
+      // onRegister={() => navigate('/register')}
     />
   );
 }
@@ -73,6 +74,7 @@ export default function App() {
             </PublicOnlyRoute>
           }
         />
+        {/* Ruta de registro oculta temporalmente (solo el administrador puede crear usuarios)
         <Route
           path="/register"
           element={
@@ -81,6 +83,7 @@ export default function App() {
             </PublicOnlyRoute>
           }
         />
+        */}
         <Route
           path="/dashboard"
           element={

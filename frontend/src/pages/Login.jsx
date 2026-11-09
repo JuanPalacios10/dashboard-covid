@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
+// import { Link, useNavigate } from 'react-router-dom';
 import AuthShell from '../components/AuthShell.jsx';
 import { useAuth } from '../context/auth.js';
 import { getApiErrorMessage } from '../utils/api.js';
@@ -77,9 +78,11 @@ export default function Login() {
         </button>
       </form>
 
+      {/* Registro oculto temporalmente: solo el administrador puede crear usuarios
       <p className="auth-switch">
         ¿No tienes cuenta? <Link to="/register">Registrarse</Link>
       </p>
+      */}
     </AuthShell>
   );
 }
