@@ -1,0 +1,72 @@
+name: CI Pipeline - Detección Temprana de Defectos (COVID-19 BI)
+
+on:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  backend-tests:
+    name: Backend CI (Pytest & MongoDB)
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      MONGO_URI: mongodb://localhost:27017
+      DATABASE_NAME: covid_bi_test
+      JWT_SECRET: test_secret_key_ci_2026
+
+    steps:
+      - name: 1. Descargar código del repositorio
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar entorno Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: backend/requirements.txt
+
+      - name: 3. Instalar dependencias y herramientas de testing
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx pytest-cov
+
+      - name: 4. Ejecutar pruebas automatizadas y generar reporte de cobertura
+        working-directory: ./backend
+        run: |
+          pytest -v --cov=app --cov-report=term-missing
+
+  frontend-tests:
+    name: Frontend CI (Build & Lint)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Descargar código del repositorio
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 3. Instalar dependencias de React
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: 4. Verificar compilación de producción (Detecta errores de sintaxis/imports)
+        working-directory: ./frontend
+        run: npm run build
