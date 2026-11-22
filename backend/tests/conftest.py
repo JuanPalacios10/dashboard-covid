@@ -23,6 +23,22 @@ def disable_mongo_for_tests(monkeypatch):
     get_settings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def clear_dependency_overrides():
+    """Limpia las sobrescrituras de dependencias antes y después de cada test.
+
+    Evita que un test deje ``get_current_user`` u otro proveedor apuntando a
+    un doble de prueba, lo que haría fallar a tests posteriores (por ejemplo,
+    ``test_kpi_sin_token_devuelve_401`` recibiendo 503 en lugar de 401).
+    """
+
+    from app.main import app
+
+    app.dependency_overrides.clear()
+    yield
+    app.dependency_overrides.clear()
+
+
 SOURCE_HEADERS = [
     "fecha reporte web",
     "ID de caso",
