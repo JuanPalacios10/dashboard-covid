@@ -77,18 +77,21 @@ def _override_executive() -> None:
 
 def test_exportar_pdf_requiere_rol_ejecutivo() -> None:
     _override_executive()
-    response = client.post(
-        '/api/v1/informes/pdf',
-        json={
-            'destino': 'Consejo de gobierno',
-            'territorio': 'Nacional',
-            'anio': '2021',
-            'departamento': '05',
-            'incluir_proyeccion': True,
-            'r': 1.5,
-            'medidas': 25,
-        },
-    )
+    try:
+        response = client.post(
+            '/api/v1/informes/pdf',
+            json={
+                'destino': 'Consejo de gobierno',
+                'territorio': 'Nacional',
+                'anio': '2021',
+                'departamento': '05',
+                'incluir_proyeccion': True,
+                'r': 1.5,
+                'medidas': 25,
+            },
+        )
+    finally:
+        app.dependency_overrides.clear()
     assert response.status_code == 200
     assert response.headers['content-type'].startswith('application/pdf')
     assert len(response.content) > 100
@@ -105,10 +108,13 @@ def test_exportar_pdf_sin_permiso_devuelve_403() -> None:
     }
     app.dependency_overrides[get_dashboard_service] = lambda: FakeDashboardService()
 
-    response = client.post(
-        '/api/v1/informes/pdf',
-        json={'destino': 'Comité de emergencia', 'territorio': 'Nacional'},
-    )
+    try:
+        response = client.post(
+            '/api/v1/informes/pdf',
+            json={'destino': 'Comité de emergencia', 'territorio': 'Nacional'},
+        )
+    finally:
+        app.dependency_overrides.clear()
     assert response.status_code == 403
 
 
@@ -141,6 +147,3 @@ def test_pdf_hash_es_determinista_y_usa_territorio_seleccionado() -> None:
     assert hash_a == hash_b
     assert hash_a
     assert hash_a != hash_distinta_territorio
-
-
-app.dependency_overrides.clear()
